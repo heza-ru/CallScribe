@@ -81,13 +81,31 @@ Classify each insight with the most specific Whatfix productArea possible (use t
 - Generic compliments or complaints without a specific feature reference
 - Customer's own internal product work unrelated to Whatfix
 
+## HOW TO WRITE DESCRIPTIONS
+
+Write descriptions as internal product documentation — NOT as a retelling of a conversation.
+
+DO:
+- "A client reported that Flows fail to trigger on dynamically rendered pages in their Salesforce instance."
+- "A customer requested the ability to filter Guidance Analytics by both date range and user segment simultaneously."
+- "This issue was observed where Smart Tips disappear after page navigation in single-page applications."
+- "Feedback received indicates that Self Help Widget search returns irrelevant results for product-specific terminology."
+
+DO NOT:
+- Use any speaker names, titles, or roles ("John mentioned…", "the VP of IT said…")
+- Reference the call, meeting, or conversation ("During the call…", "They told us…", "In the meeting…")
+- Use first- or second-person ("We were told…", "You mentioned…")
+- Directly quote conversational speech
+
+Every description must read as if a product manager wrote it after reviewing the feedback — with no trace of its conversational origin.
+
 ## OUTPUT FORMAT
 
 Return ONLY a valid JSON array with no preamble, no explanation, no markdown fences.
 
 Each item:
 - title: Max 80 chars. Phrased as a problem statement or request, not a sentence.
-- description: 2–3 sentences. Be specific – quote or closely paraphrase the customer's words. Include their use case.
+- description: 2–3 sentences following the description guidelines above. Be specific about the use case and impact.
 - productArea: Most specific Whatfix feature name from the table above (e.g. "Flows", "Smart Tips", "Product Analytics", "Mirror", "Self Help Widget", "Segments", "Integration Hub", "Content Editor", "Extensions", "Surveys", "Beacons", "Task Lists", "Guidance Analytics", "AI Agents")
 - priority: "Critical" | "High" | "Medium" | "Low"
 - type: "bug" | "feature" | "pain" | "improvement"
@@ -96,7 +114,7 @@ Example:
 [
   {
     "title": "Flow completion rate missing from scheduled PDF exports",
-    "description": "The customer's product ops team exports analytics dashboards as PDFs every Monday for stakeholder reviews. Flow completion rates are not included in these exports, forcing manual copy-paste. They called it their \\"most painful weekly task\\".",
+    "description": "A client reported that Flow completion rates are not included in scheduled PDF exports from the analytics dashboard. This forces their team to manually copy data into stakeholder reports on a recurring basis. The missing metric is considered a significant workflow blocker for reporting processes.",
     "productArea": "Guidance Analytics",
     "priority": "High",
     "type": "feature"

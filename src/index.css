@@ -2,11 +2,12 @@
    Design Tokens
    ============================================================ */
 :root {
-  --color-primary: #2b21ba;
-  --color-primary-hover: #231aaa;
-  --color-primary-active: #1c149a;
-  --color-primary-light: #ede9ff;
-  --color-primary-faint: #f5f3ff;
+  /* Standard blue palette — matches Percam-style modern extension UI */
+  --color-primary: #2563EB;
+  --color-primary-hover: #1D4ED8;
+  --color-primary-active: #1E40AF;
+  --color-primary-light: #EFF6FF;
+  --color-primary-faint: #DBEAFE;
 
   --color-accent: #f26b3a;
   --color-accent-hover: #e05d2d;
@@ -22,7 +23,7 @@
   --color-surface: #f6f6f8;
   --color-surface-hover: #ededf1;
   --color-border: #ebebeb;
-  --color-border-focus: #2b21ba;
+  --color-border-focus: #2563EB;
   --color-border-strong: #d0d0d0;
 
   --color-success: #16a34a;
@@ -34,8 +35,8 @@
 
   --color-bug: #dc2626;
   --color-bug-light: #fef2f2;
-  --color-feature: #2b21ba;
-  --color-feature-light: #ede9ff;
+  --color-feature: #2563EB;
+  --color-feature-light: #EFF6FF;
   --color-pain: #d97706;
   --color-pain-light: #fffbeb;
   --color-improvement: #16a34a;
@@ -186,10 +187,12 @@ body {
 
 .screen-body {
   flex: 1;
+  min-height: 0;           /* critical: lets flex child shrink below content height */
   padding: 0 14px;
   display: flex;
   flex-direction: column;
   overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .screen-footer {
@@ -242,6 +245,14 @@ body {
 .status-dot.gray   { background: var(--color-border-strong); }
 .status-dot.blue   { background: var(--color-primary); animation: pulseDot 1.4s ease infinite; }
 
+/* Inner scroll container — use inside screen-body for sub-sections that need independent scroll */
+.scroll-inner {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
 /* ============================================================
    Typography
    ============================================================ */
@@ -276,7 +287,7 @@ textarea:focus,
 select:focus {
   background: var(--color-bg);
   border-color: var(--color-border-focus);
-  box-shadow: 0 0 0 3px rgba(43,33,186,0.10);
+  box-shadow: 0 0 0 3px rgba(37,99,235,0.12);
 }
 
 input:hover:not(:focus),
@@ -308,12 +319,12 @@ label {
 .form-grid  { display: flex; flex-direction: column; gap: 10px; }
 
 /* ============================================================
-   Scrollbar
+   Scrollbar — visible enough to signal scrollability
    ============================================================ */
-::-webkit-scrollbar       { width: 3px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: var(--radius-full); }
-::-webkit-scrollbar-thumb:hover { background: var(--color-border-strong); }
+::-webkit-scrollbar       { width: 5px; }
+::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 99px; }
+::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
 
 /* ============================================================
    Skeleton / loading shimmer
@@ -340,7 +351,7 @@ label {
 }
 .banner.error   { background: var(--color-error-light);   color: var(--color-error);   box-shadow: 0 0 0 1px rgba(220,38,38,0.15); }
 .banner.success { background: var(--color-success-light); color: var(--color-success); box-shadow: 0 0 0 1px rgba(22,163,74,0.15); }
-.banner.info    { background: var(--color-primary-faint); color: var(--color-primary); box-shadow: 0 0 0 1px rgba(43,33,186,0.12); }
+.banner.info    { background: var(--color-primary-faint); color: var(--color-primary); box-shadow: 0 0 0 1px rgba(37,99,235,0.14); }
 
 /* ============================================================
    Utility

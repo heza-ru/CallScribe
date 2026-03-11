@@ -14,7 +14,7 @@ import { createProductboardInsight } from '../services/productboardService';
 
 const TYPE_META = {
   bug:         { icon: Bug,           bg: '#fef2f2', color: '#dc2626', label: 'Bug' },
-  feature:     { icon: Zap,           bg: '#ede9ff', color: '#2b21ba', label: 'Feature' },
+  feature:     { icon: Zap,           bg: '#EFF6FF', color: '#2563EB', label: 'Feature' },
   pain:        { icon: MessageSquare, bg: '#fffbeb', color: '#d97706', label: 'Pain Point' },
   improvement: { icon: Lightbulb,     bg: '#f0fdf4', color: '#16a34a', label: 'Improvement' },
   action:      { icon: ListTodo,      bg: '#f0f9ff', color: '#0369a1', label: 'Action Item' },
@@ -233,7 +233,7 @@ function InsightCard({ insight, meetingId, settings, onEdit, primaryAction }) {
                 loading={jira.loading}
                 disabled={isBusy}
                 onClick={handleJira}
-                style={{ flex: 1 }}
+                style={{ flex: 1, flexShrink: 1 }}
               >
                 {jira.loading ? 'Creating…' : 'Create JIRA'}
               </Button>
@@ -259,7 +259,7 @@ function InsightCard({ insight, meetingId, settings, onEdit, primaryAction }) {
                 loading={pb.loading}
                 disabled={isBusy}
                 onClick={handlePB}
-                style={{ flex: 1 }}
+                style={{ flex: 1, flexShrink: 1 }}
               >
                 {pb.loading ? 'Creating…' : 'Productboard'}
               </Button>
@@ -334,11 +334,11 @@ export function AnalysisScreen({ state, dispatch }) {
       {reanalyzing && (
         <div style={{
           display: 'flex', alignItems: 'center', gap: 7,
-          fontSize: 12, color: '#2b21ba', padding: '8px 14px 0',
+          fontSize: 12, color: '#2563EB', padding: '8px 14px 0',
         }}>
           <span style={{
             width: 12, height: 12, flexShrink: 0,
-            border: '1.5px solid #ddd', borderTopColor: '#2b21ba',
+            border: '1.5px solid #ddd', borderTopColor: '#2563EB',
             borderRadius: '50%', animation: 'spin 0.7s linear infinite',
             display: 'inline-block',
           }} />
@@ -370,7 +370,7 @@ export function AnalysisScreen({ state, dispatch }) {
               fontSize: 11, color: '#555', lineHeight: 1.6,
               display: 'flex', gap: 8, alignItems: 'flex-start',
             }}>
-              <Info size={12} style={{ color: '#2b21ba', flexShrink: 0, marginTop: 1 }} />
+              <Info size={12} style={{ color: '#2563EB', flexShrink: 0, marginTop: 1 }} />
               <span>
                 This may be a call focused on scheduling, professional services, or general account management.
                 Try a call where the customer discusses product usage, issues, or requests.
@@ -383,7 +383,7 @@ export function AnalysisScreen({ state, dispatch }) {
         {jiraTrack.length > 0 && (
           <>
             <SectionHeader
-              icon={ListChecks} iconColor="#2b21ba" iconBg="#ede9ff"
+              icon={ListChecks} iconColor="#2563EB" iconBg="#EFF6FF"
               title="JIRA Tickets" count={jiraTrack.length}
             />
             {jiraTrack.map((insight) => (

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   FileText, Settings, AlertTriangle, CheckCircle2, Loader2, Mic,
-  Sparkles, ChevronRight, ArrowRight, Zap, Layers, RefreshCw,
+  Sparkles, ChevronRight, Zap, Layers, RefreshCw, Circle,
 } from 'lucide-react';
 import { Button } from './ui/Button';
 import { IconButton } from './ui/IconButton';
@@ -10,6 +10,9 @@ import { parseChunks } from '../utils/mindtickleParser';
 import { analyzeTranscript } from '../services/claudeService';
 
 const STATUS = { CHECKING: 'checking', FOUND: 'found', NOT_FOUND: 'not_found', ERROR: 'error' };
+
+const BLUE = '#2563EB';
+const BLUE_LIGHT = '#EFF6FF';
 
 // ─────────────────────────────────────────
 // Sub-components
@@ -21,111 +24,104 @@ function ActionTile({ icon: Icon, iconBg, iconColor, title, desc, onClick, disab
       onClick={!disabled ? onClick : undefined}
       style={{
         display: 'flex', alignItems: 'center', gap: 12,
-        padding: '12px 14px', borderRadius: 12,
+        padding: '12px 14px', borderRadius: 10,
         background: '#fff',
-        boxShadow: 'var(--shadow-card)',
+        border: '1px solid #e8edf5',
         cursor: disabled ? 'default' : 'pointer',
         opacity: disabled && !loading ? 0.48 : 1,
-        transition: 'background 130ms ease, box-shadow 130ms ease, transform 100ms ease',
+        transition: 'background 130ms, box-shadow 130ms, transform 100ms',
         userSelect: 'none',
       }}
       onMouseEnter={(e) => {
         if (!disabled) {
-          e.currentTarget.style.background = '#fafafa';
-          e.currentTarget.style.boxShadow = 'var(--shadow-lift)';
+          e.currentTarget.style.background = '#f8faff';
+          e.currentTarget.style.boxShadow = '0 2px 8px rgba(37,99,235,0.08)';
         }
       }}
       onMouseLeave={(e) => {
         e.currentTarget.style.background = '#fff';
-        e.currentTarget.style.boxShadow = 'var(--shadow-card)';
+        e.currentTarget.style.boxShadow = 'none';
       }}
       onMouseDown={(e) => { if (!disabled) e.currentTarget.style.transform = 'scale(0.985)'; }}
       onMouseUp={(e)   => { e.currentTarget.style.transform = 'scale(1)'; }}
     >
       <div style={{
-        width: 38, height: 38, borderRadius: 10, background: iconBg,
+        width: 36, height: 36, borderRadius: 9, background: iconBg,
         display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
       }}>
         {loading
-          ? <span style={{ width: 15, height: 15, border: '2px solid rgba(0,0,0,0.1)', borderTopColor: iconColor, borderRadius: '50%', animation: 'spin 0.7s linear infinite', display: 'inline-block' }} />
-          : <Icon size={16} style={{ color: iconColor }} strokeWidth={2} />
+          ? <span style={{ width: 14, height: 14, border: '2px solid rgba(0,0,0,0.1)', borderTopColor: iconColor, borderRadius: '50%', animation: 'spin 0.7s linear infinite', display: 'inline-block' }} />
+          : <Icon size={15} style={{ color: iconColor }} strokeWidth={2} />
         }
       </div>
 
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span className="text-heading">{title}</span>
+          <span style={{ fontSize: 13, fontWeight: 600, color: '#1e293b' }}>{title}</span>
           {badge && (
             <span style={{
               fontSize: 9, fontWeight: 700, color: '#f26b3a', background: '#fff1eb',
-              padding: '1px 5px', borderRadius: 3, textTransform: 'uppercase', letterSpacing: '0.05em',
-              flexShrink: 0,
+              padding: '1px 5px', borderRadius: 3, textTransform: 'uppercase',
+              letterSpacing: '0.05em', flexShrink: 0,
             }}>
               {badge}
             </span>
           )}
         </div>
-        <div className="text-meta" style={{ marginTop: 2 }}>{desc}</div>
+        <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>{desc}</div>
       </div>
 
-      <ChevronRight size={13} style={{ color: '#ccc', flexShrink: 0 }} />
+      <ChevronRight size={13} style={{ color: '#cbd5e1', flexShrink: 0 }} />
     </div>
   );
 }
 
-function WorkflowStrip() {
-  const steps = [
-    { label: 'Fetch',       color: '#2b21ba', bg: '#ede9ff' },
-    { label: 'AI Analysis', color: '#f26b3a', bg: '#fff1eb' },
-    { label: 'JIRA',        color: '#0369a1', bg: '#f0f9ff' },
-    { label: 'Productboard',color: '#d97706', bg: '#fffbeb' },
+function APIStatusCard({ settings }) {
+  const checks = [
+    {
+      label: 'Claude AI',
+      ok: !!settings?.claudeApiKey,
+      hint: 'console.anthropic.com',
+    },
+    {
+      label: 'JIRA',
+      ok: !!(settings?.jiraBaseUrl && settings?.jiraApiToken && settings?.jiraProjectKey),
+      hint: settings?.jiraProjectKey ? `Project: ${settings.jiraProjectKey}` : 'Not configured',
+    },
+    {
+      label: 'Productboard',
+      ok: !!settings?.productboardApiKey,
+      hint: 'Developer token',
+    },
   ];
-  return (
-    <div style={{
-      padding: '11px 13px', borderRadius: 10,
-      background: '#f6f6f8', boxShadow: 'var(--shadow-card)',
-    }}>
-      <div style={{
-        fontSize: 10, fontWeight: 700, textTransform: 'uppercase',
-        letterSpacing: '0.08em', color: '#aaa', marginBottom: 8,
-      }}>
-        Workflow
-      </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-        {steps.map((s, i) => (
-          <React.Fragment key={s.label}>
-            <div style={{
-              flex: 1, textAlign: 'center',
-              padding: '5px 4px', borderRadius: 6,
-              background: s.bg, fontSize: 10, fontWeight: 600, color: s.color,
-            }}>
-              {s.label}
-            </div>
-            {i < steps.length - 1 && (
-              <ArrowRight size={9} style={{ color: '#ccc', flexShrink: 0 }} />
-            )}
-          </React.Fragment>
-        ))}
-      </div>
-    </div>
-  );
-}
 
-function FeatureCard({ icon: Icon, color, bg, title, desc }) {
   return (
     <div style={{
-      display: 'flex', flexDirection: 'column', alignItems: 'center',
-      gap: 6, padding: '12px 8px', borderRadius: 10,
-      background: bg, textAlign: 'center',
+      borderRadius: 10, border: '1px solid #e8edf5',
+      background: '#fff', overflow: 'hidden',
     }}>
-      <div style={{
-        width: 28, height: 28, borderRadius: 7, background: color + '18',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-      }}>
-        <Icon size={13} style={{ color }} strokeWidth={2} />
-      </div>
-      <div style={{ fontSize: 11, fontWeight: 600, color, lineHeight: 1.2 }}>{title}</div>
-      <div style={{ fontSize: 10, color: '#888', lineHeight: 1.4 }}>{desc}</div>
+      {checks.map((c, i) => (
+        <div key={c.label} style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          padding: '9px 14px',
+          borderBottom: i < checks.length - 1 ? '1px solid #f1f5f9' : 'none',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{
+              width: 7, height: 7, borderRadius: '50%', flexShrink: 0,
+              background: c.ok ? '#22c55e' : '#e2e8f0',
+              boxShadow: c.ok ? '0 0 0 2px rgba(34,197,94,0.2)' : 'none',
+            }} />
+            <span style={{ fontSize: 12.5, fontWeight: 500, color: '#1e293b' }}>{c.label}</span>
+          </div>
+          <span style={{
+            fontSize: 10.5, fontWeight: 500,
+            color: c.ok ? '#16a34a' : '#94a3b8',
+          }}>
+            {c.ok ? 'Ready' : 'Not set'}
+          </span>
+        </div>
+      ))}
     </div>
   );
 }
@@ -135,19 +131,19 @@ function StepCard({ n, title, desc }) {
     <div style={{
       display: 'flex', gap: 11, alignItems: 'flex-start',
       padding: '11px 13px', borderRadius: 10,
-      background: '#fff', boxShadow: 'var(--shadow-card)',
+      background: '#fff', border: '1px solid #e8edf5',
     }}>
       <div style={{
-        width: 22, height: 22, borderRadius: '50%', background: '#ede9ff',
+        width: 22, height: 22, borderRadius: '50%', background: BLUE_LIGHT,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         flexShrink: 0, marginTop: 1,
-        fontSize: 10.5, fontWeight: 700, color: '#2b21ba',
+        fontSize: 10.5, fontWeight: 700, color: BLUE,
       }}>
         {n}
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div className="text-heading" style={{ fontSize: 12.5 }}>{title}</div>
-        <div className="text-meta" style={{ marginTop: 3, lineHeight: 1.5 }}>{desc}</div>
+        <div style={{ fontSize: 12.5, fontWeight: 600, color: '#1e293b' }}>{title}</div>
+        <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 3, lineHeight: 1.5 }}>{desc}</div>
       </div>
     </div>
   );
@@ -216,17 +212,17 @@ export function DetectionScreen({ state, dispatch }) {
   return (
     <div className="screen">
       {/* ── Header ── */}
-      <div className="screen-header">
+      <div className="screen-header" style={{ background: '#fff' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <div style={{
-            width: 32, height: 32, background: '#2b21ba', borderRadius: 9,
+            width: 30, height: 30, background: BLUE, borderRadius: 8,
             display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
           }}>
-            <Mic size={15} color="#fff" strokeWidth={2.5} />
+            <Mic size={14} color="#fff" strokeWidth={2.5} />
           </div>
           <div>
-            <div className="text-title">CallScribe</div>
-            <div className="text-meta">Mindtickle · Whatfix</div>
+            <div style={{ fontSize: 14, fontWeight: 600, color: '#1e293b', letterSpacing: '-0.01em' }}>CallScribe</div>
+            <div style={{ fontSize: 11, color: '#94a3b8' }}>Mindtickle · Whatfix</div>
           </div>
         </div>
         <IconButton icon={Settings} title="Settings"
@@ -243,14 +239,14 @@ export function DetectionScreen({ state, dispatch }) {
             alignItems: 'center', justifyContent: 'center', gap: 14, padding: '60px 0',
           }}>
             <div style={{
-              width: 52, height: 52, borderRadius: 14, background: '#ede9ff',
+              width: 50, height: 50, borderRadius: 14, background: BLUE_LIGHT,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
             }}>
-              <Loader2 size={22} style={{ color: '#2b21ba', animation: 'spin 1s linear infinite' }} />
+              <Loader2 size={22} style={{ color: BLUE, animation: 'spin 1s linear infinite' }} />
             </div>
             <div style={{ textAlign: 'center' }}>
-              <div className="text-heading" style={{ fontSize: 14 }}>Scanning page…</div>
-              <div className="text-meta" style={{ marginTop: 4 }}>Looking for a Mindtickle recording</div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: '#1e293b' }}>Scanning page…</div>
+              <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>Looking for a Mindtickle recording</div>
             </div>
           </div>
         )}
@@ -261,23 +257,18 @@ export function DetectionScreen({ state, dispatch }) {
             {/* Status card */}
             <div style={{
               display: 'flex', alignItems: 'center', gap: 10,
-              padding: '12px 14px', borderRadius: 12,
-              background: '#f0fdf4', boxShadow: '0 0 0 1px rgba(22,163,74,0.18)',
-              marginBottom: 18,
+              padding: '11px 14px', borderRadius: 10,
+              background: '#f0fdf4', border: '1px solid #bbf7d0',
+              marginBottom: 16,
             }}>
-              <div style={{
-                width: 32, height: 32, borderRadius: 9, background: '#dcfce7',
-                display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-              }}>
-                <CheckCircle2 size={15} style={{ color: '#16a34a' }} />
-              </div>
+              <CheckCircle2 size={16} style={{ color: '#16a34a', flexShrink: 0 }} />
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div className="text-heading" style={{ color: '#15803d' }}>Recording detected</div>
-                <div className="text-meta" style={{ marginTop: 3 }}>
-                  Meeting&ensp;
+                <div style={{ fontSize: 13, fontWeight: 600, color: '#15803d' }}>Recording detected</div>
+                <div style={{ fontSize: 11, color: '#4ade80', marginTop: 2 }}>
+                  <span style={{ color: '#166534' }}>Meeting&ensp;</span>
                   <code style={{
                     fontFamily: 'monospace', fontSize: 10.5,
-                    background: 'rgba(22,163,74,0.12)', padding: '1px 7px',
+                    background: 'rgba(22,163,74,0.1)', padding: '1px 7px',
                     borderRadius: 4, color: '#15803d',
                   }}>
                     {state.meetingId}
@@ -287,13 +278,10 @@ export function DetectionScreen({ state, dispatch }) {
             </div>
 
             {/* Actions */}
-            <div style={{
-              fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase',
-              letterSpacing: '0.08em', color: '#aaa', marginBottom: 8,
-            }}>
+            <div style={{ fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#94a3b8', marginBottom: 8 }}>
               Actions
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }} className="anim-stagger">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }} className="anim-stagger">
               <ActionTile
                 icon={Sparkles} iconBg="#fff1eb" iconColor="#f26b3a"
                 title="Load & Analyze" desc="Fetch transcript + extract JIRA bugs & Productboard insights"
@@ -302,20 +290,19 @@ export function DetectionScreen({ state, dispatch }) {
                 onClick={() => handleLoad(true)}
               />
               <ActionTile
-                icon={FileText} iconBg="#ede9ff" iconColor="#2b21ba"
+                icon={FileText} iconBg={BLUE_LIGHT} iconColor={BLUE}
                 title="Load Transcript" desc="Preview the transcript before running analysis"
                 disabled={isBusy} loading={loading && !analyzing}
                 onClick={() => handleLoad(false)}
               />
               <ActionTile
-                icon={Settings} iconBg="#f6f6f8" iconColor="#777"
+                icon={Settings} iconBg="#f8fafc" iconColor="#64748b"
                 title="Configure APIs" desc="Set up Claude AI, JIRA, and Productboard credentials"
                 disabled={isBusy}
                 onClick={() => dispatch({ type: 'SET_SCREEN', screen: SCREENS.SETTINGS })}
               />
             </div>
 
-            {/* Error */}
             {state.error && (
               <div className="banner error anim-slide-up" style={{ marginTop: 10 }}>
                 <AlertTriangle size={12} style={{ flexShrink: 0, marginTop: 1 }} />
@@ -323,9 +310,12 @@ export function DetectionScreen({ state, dispatch }) {
               </div>
             )}
 
-            {/* Workflow strip — pushed to bottom */}
+            {/* API Status — pushed to bottom */}
             <div style={{ marginTop: 'auto', paddingTop: 18 }}>
-              <WorkflowStrip />
+              <div style={{ fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#94a3b8', marginBottom: 7 }}>
+                API Connections
+              </div>
+              <APIStatusCard settings={state.settings} />
             </div>
           </>
         )}
@@ -336,23 +326,17 @@ export function DetectionScreen({ state, dispatch }) {
             {/* Status card */}
             <div style={{
               display: 'flex', alignItems: 'center', gap: 11,
-              padding: '12px 14px', borderRadius: 12,
+              padding: '11px 14px', borderRadius: 10,
               background: status === STATUS.ERROR ? '#fef2f2' : '#fffbeb',
-              boxShadow: `0 0 0 1px rgba(${status === STATUS.ERROR ? '220,38,38' : '217,119,6'},0.14)`,
-              marginBottom: 18,
+              border: `1px solid ${status === STATUS.ERROR ? '#fecaca' : '#fde68a'}`,
+              marginBottom: 16,
             }}>
-              <div style={{
-                width: 32, height: 32, borderRadius: 9,
-                background: status === STATUS.ERROR ? '#fee2e2' : '#fef3c7',
-                display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-              }}>
-                <AlertTriangle size={15} style={{ color: status === STATUS.ERROR ? '#dc2626' : '#d97706' }} />
-              </div>
+              <AlertTriangle size={16} style={{ color: status === STATUS.ERROR ? '#dc2626' : '#d97706', flexShrink: 0 }} />
               <div>
-                <div className="text-heading" style={{ color: status === STATUS.ERROR ? '#b91c1c' : '#92400e' }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: status === STATUS.ERROR ? '#b91c1c' : '#92400e' }}>
                   {status === STATUS.ERROR ? 'Detection failed' : 'No recording found'}
                 </div>
-                <div className="text-meta" style={{ marginTop: 3 }}>
+                <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>
                   {status === STATUS.ERROR
                     ? 'Could not communicate with the page. Try refreshing.'
                     : 'Navigate to a Mindtickle call recording page to begin.'}
@@ -361,10 +345,7 @@ export function DetectionScreen({ state, dispatch }) {
             </div>
 
             {/* Steps */}
-            <div style={{
-              fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase',
-              letterSpacing: '0.08em', color: '#aaa', marginBottom: 8,
-            }}>
+            <div style={{ fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#94a3b8', marginBottom: 8 }}>
               How to get started
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }} className="anim-stagger">
@@ -373,19 +354,12 @@ export function DetectionScreen({ state, dispatch }) {
               <StepCard n={3} title='Click "Load & Analyze"' desc="CallScribe will fetch the transcript and extract Whatfix product insights automatically." />
             </div>
 
-            {/* Feature highlights — pushed to bottom */}
+            {/* API Status — pushed to bottom */}
             <div style={{ marginTop: 'auto', paddingTop: 18 }}>
-              <div style={{
-                fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase',
-                letterSpacing: '0.08em', color: '#aaa', marginBottom: 8,
-              }}>
-                What CallScribe does
+              <div style={{ fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#94a3b8', marginBottom: 7 }}>
+                API Connections
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 7 }}>
-                <FeatureCard icon={Sparkles} color="#f26b3a" bg="#fff8f5" title="AI Analysis" desc="Claude extracts bugs, features & pain points" />
-                <FeatureCard icon={Zap}      color="#2b21ba" bg="#f5f3ff" title="JIRA Tickets" desc="Bugs & improvements go straight to your board" />
-                <FeatureCard icon={Layers}   color="#d97706" bg="#fffbeb" title="Productboard" desc="Features & pain points as product insights" />
-              </div>
+              <APIStatusCard settings={state.settings} />
             </div>
           </>
         )}
@@ -411,27 +385,23 @@ export function DetectionScreen({ state, dispatch }) {
               icon={analyzing ? undefined : Sparkles}
               onClick={() => handleLoad(true)}
             >
-              {analyzing ? 'Analyzing with Claude…' : 'Load & Analyze'}
+              {analyzing ? 'Analyzing…' : 'Load & Analyze'}
             </Button>
           </div>
         ) : status === STATUS.CHECKING ? (
-          <Button fullWidth size="md" variant="secondary" disabled>
-            Detecting…
-          </Button>
+          <Button fullWidth size="md" variant="secondary" disabled>Detecting…</Button>
         ) : (
           <div style={{ display: 'flex', gap: 8 }}>
             <Button
               style={{ flex: 1, minWidth: 0, flexShrink: 1 }}
-              size="md" variant="primary"
-              icon={RefreshCw}
+              size="md" variant="primary" icon={RefreshCw}
               onClick={detect}
             >
               Retry
             </Button>
             <Button
               style={{ flex: 1, minWidth: 0, flexShrink: 1 }}
-              size="md" variant="secondary"
-              icon={Settings}
+              size="md" variant="secondary" icon={Settings}
               onClick={() => dispatch({ type: 'SET_SCREEN', screen: SCREENS.SETTINGS })}
             >
               Settings

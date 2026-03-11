@@ -1,7 +1,7 @@
 import React from 'react';
 
 const variants = {
-  primary:   { bg: '#2b21ba', hover: '#231aaa', active: '#1c149a', color: '#fff', border: 'none' },
+  primary:   { bg: '#2563EB', hover: '#1D4ED8', active: '#1E40AF', color: '#fff', border: 'none' },
   secondary: { bg: '#ffffff', hover: '#f7f7f9', active: '#f0f0f4', color: '#0a0a0a', border: '1.5px solid #e5e5e5' },
   ghost:     { bg: 'transparent', hover: '#f7f7f9', active: '#f0f0f4', color: '#525252', border: 'none' },
   danger:    { bg: '#dc2626', hover: '#b91c1c', active: '#991b1b', color: '#fff', border: 'none' },
