@@ -1,9 +1,11 @@
 import { buildRequestBody } from '../utils/promptBuilder';
+import { compressTranscript } from '../utils/transcriptCompressor';
 
 const CLAUDE_API_URL = 'https://api.anthropic.com/v1/messages';
 
 /**
  * Analyze a transcript with Claude AI and return structured insights.
+ * The transcript is compressed before sending to reduce token usage.
  * @param {string} transcript - Assembled plain-text transcript
  * @param {string} meetingId
  * @param {string} apiKey - Claude API key from storage
@@ -12,7 +14,16 @@ const CLAUDE_API_URL = 'https://api.anthropic.com/v1/messages';
 export async function analyzeTranscript(transcript, meetingId, apiKey) {
   if (!apiKey) throw new Error('Claude API key is not configured. Please open Settings.');
 
-  const body = buildRequestBody(transcript, meetingId);
+  const { text: compressedTranscript, stats } = compressTranscript(transcript);
+
+  if (stats) {
+    console.info(
+      `[CallScribe] Transcript compressed: ${stats.originalChars} → ${stats.compressedChars} chars` +
+        ` (${stats.compressionRatio}% saved, ${stats.originalLines} → ${stats.processedLines} lines)`
+    );
+  }
+
+  const body = buildRequestBody(compressedTranscript, meetingId);
 
   const response = await fetch(CLAUDE_API_URL, {
     method: 'POST',
