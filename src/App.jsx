@@ -63,8 +63,8 @@ export default function App() {
   const screenProps = { state, dispatch };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
-      <div key={screen} style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
+      <div key={screen} style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
         {screen === SCREENS.DETECTION          && <DetectionScreen {...screenProps} />}
         {screen === SCREENS.TRANSCRIPT_ACTIONS && <TranscriptActions {...screenProps} />}
         {screen === SCREENS.ANALYSIS           && <AnalysisScreen {...screenProps} />}

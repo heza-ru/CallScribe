@@ -91,10 +91,11 @@ body {
 /* Side panel fills the full panel height */
 #root {
   width: 100%;
-  min-height: 100vh;
+  height: 100vh;
   display: flex;
   flex-direction: column;
   background: var(--color-bg);
+  overflow: hidden;
 }
 
 /* ============================================================
@@ -169,7 +170,8 @@ body {
   display: flex;
   flex-direction: column;
   flex: 1;
-  min-height: 100vh;
+  height: 100vh;
+  overflow: hidden;
 }
 
 .screen-header {
@@ -187,6 +189,7 @@ body {
   padding: 0 14px;
   display: flex;
   flex-direction: column;
+  overflow-y: auto;
 }
 
 .screen-footer {

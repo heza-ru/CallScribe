@@ -20,7 +20,7 @@ export async function analyzeTranscript(transcript, meetingId, apiKey) {
       'Content-Type': 'application/json',
       'x-api-key': apiKey,
       'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-allow-browser': 'true',
+      'anthropic-dangerous-direct-browser-access': 'true',
     },
     body: JSON.stringify(body),
   });
