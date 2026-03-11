@@ -1,35 +1,33 @@
 const PB_API_BASE = 'https://api.productboard.com';
 
 /**
- * Creates a Productboard insight.
+ * Creates a Productboard note (insight).
+ *
+ * The Productboard notes API v1 only accepts `title` and `content` in
+ * `data.attributes`. Any extra fields (source, tags) cause a 422 error.
+ * All metadata is embedded in the content body instead.
  *
  * @param {object} ticket - Ticket data
  * @param {object} settings - { productboardApiKey }
  * @returns {Promise<{ id: string, url: string }>}
  */
 export async function createProductboardInsight(ticket, settings) {
-  const { productboardApiKey } = settings;
+  const { productboardApiKey } = settings || {};
 
   if (!productboardApiKey) {
     throw new Error('Productboard API key is not configured. Please check Settings.');
   }
 
-  const tags = ['callscribe', 'transcript'];
-  if (ticket.productArea) tags.push(ticket.productArea.toLowerCase().replace(/\s+/g, '-'));
-  if (ticket.type) tags.push(ticket.type);
-  if (ticket.labels) tags.push(...ticket.labels);
-
   const payload = {
     data: {
       type: 'note',
       attributes: {
-        title: ticket.title,
-        content: buildContent(ticket),
-        tags: [...new Set(tags)],
-        source: {
-          origin: 'CallScribe',
-          record_id: ticket.meetingId || undefined,
-        },
+        title:       ticket.title,
+        content:     buildContent(ticket),
+        // display_url links the note back to the source recording
+        ...(ticket.meetingId
+          ? { display_url: `https://app.mindtickle.com/call/${ticket.meetingId}` }
+          : {}),
       },
     },
   };
@@ -38,15 +36,25 @@ export async function createProductboardInsight(ticket, settings) {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${productboardApiKey}`,
+      'Authorization': `Bearer ${productboardApiKey}`,
       'X-Version': '1',
     },
     body: JSON.stringify(payload),
   });
 
   if (!response.ok) {
-    const err = await response.json().catch(() => ({}));
-    const detail = err?.errors?.[0]?.detail || err?.error || `HTTP ${response.status}`;
+    const errText = await response.text().catch(() => '');
+    let detail = `HTTP ${response.status}`;
+    try {
+      const err = JSON.parse(errText);
+      detail =
+        err?.errors?.[0]?.detail ||
+        err?.errors?.[0]?.title  ||
+        err?.error                ||
+        detail;
+    } catch {
+      // keep generic
+    }
     throw new Error(`Productboard error: ${detail}`);
   }
 
@@ -59,10 +67,20 @@ export async function createProductboardInsight(ticket, settings) {
 }
 
 function buildContent(ticket) {
-  const parts = [ticket.description || ''];
-  if (ticket.productArea) parts.push(`\nProduct Area: ${ticket.productArea}`);
-  if (ticket.priority) parts.push(`Priority: ${ticket.priority}`);
-  if (ticket.type) parts.push(`Type: ${ticket.type}`);
-  if (ticket.meetingId) parts.push(`\nSource: CallScribe transcript (Meeting ID: ${ticket.meetingId})`);
-  return parts.join('\n');
+  const lines = [];
+
+  if (ticket.description) lines.push(ticket.description);
+
+  lines.push('');
+  lines.push('---');
+
+  if (ticket.type)        lines.push(`Type: ${ticket.type}`);
+  if (ticket.priority)    lines.push(`Priority: ${ticket.priority}`);
+  if (ticket.productArea) lines.push(`Product Area: ${ticket.productArea}`);
+  if (ticket.labels?.length) lines.push(`Labels: ${ticket.labels.join(', ')}`);
+
+  lines.push('');
+  lines.push(`Source: CallScribe transcript${ticket.meetingId ? ` (Meeting ID: ${ticket.meetingId})` : ''}`);
+
+  return lines.join('\n');
 }

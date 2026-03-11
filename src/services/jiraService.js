@@ -6,66 +6,67 @@
  * @returns {Promise<{ key: string, url: string }>}
  */
 export async function createJiraTicket(ticket, settings) {
-  const { jiraBaseUrl, jiraEmail, jiraApiToken, jiraProjectKey } = settings;
+  const { jiraBaseUrl, jiraEmail, jiraApiToken, jiraProjectKey } = settings || {};
 
   if (!jiraBaseUrl || !jiraEmail || !jiraApiToken || !jiraProjectKey) {
     throw new Error('JIRA configuration is incomplete. Please check Settings.');
   }
 
-  const baseUrl = jiraBaseUrl.replace(/\/$/, '');
+  // Force HTTPS – a http→https redirect converts POST to GET (405)
+  let baseUrl = jiraBaseUrl.trim().replace(/\/$/, '');
+  if (baseUrl.startsWith('http://')) {
+    baseUrl = 'https://' + baseUrl.slice(7);
+  } else if (!baseUrl.startsWith('https://')) {
+    baseUrl = 'https://' + baseUrl;
+  }
+
   const credentials = btoa(`${jiraEmail}:${jiraApiToken}`);
 
   const issueTypeMap = {
-    bug: 'Bug',
-    feature: 'Story',
-    pain: 'Story',
+    bug:         'Bug',
+    feature:     'Story',
+    pain:        'Story',
     improvement: 'Improvement',
-    action: 'Task',
+    action:      'Task',
   };
 
   const priorityMap = {
     Critical: 'Critical',
-    High: 'High',
-    Medium: 'Medium',
-    Low: 'Low',
+    High:     'High',
+    Medium:   'Medium',
+    Low:      'Low',
   };
+
+  const descriptionParts = [
+    {
+      type: 'paragraph',
+      content: [{ type: 'text', text: ticket.description || '' }],
+    },
+  ];
+
+  if (ticket.productArea) {
+    descriptionParts.push({
+      type: 'paragraph',
+      content: [{ type: 'text', text: `Product Area: ${ticket.productArea}`, marks: [{ type: 'strong' }] }],
+    });
+  }
+
+  descriptionParts.push({
+    type: 'paragraph',
+    content: [{
+      type: 'text',
+      text: `Source: CallScribe transcript (Meeting ID: ${ticket.meetingId || 'unknown'})`,
+      marks: [{ type: 'em' }],
+    }],
+  });
 
   const payload = {
     fields: {
-      project: { key: jiraProjectKey },
-      summary: ticket.title,
-      description: {
-        type: 'doc',
-        version: 1,
-        content: [
-          {
-            type: 'paragraph',
-            content: [{ type: 'text', text: ticket.description }],
-          },
-          ...(ticket.productArea
-            ? [
-                {
-                  type: 'paragraph',
-                  content: [
-                    { type: 'text', text: `Product Area: ${ticket.productArea}`, marks: [{ type: 'strong' }] },
-                  ],
-                },
-              ]
-            : []),
-          {
-            type: 'paragraph',
-            content: [
-              {
-                type: 'text',
-                text: `Source: CallScribe transcript (Meeting ID: ${ticket.meetingId || 'unknown'})`,
-                marks: [{ type: 'em' }],
-              },
-            ],
-          },
-        ],
-      },
-      issuetype: { name: issueTypeMap[ticket.type] || 'Task' },
-      priority: { name: priorityMap[ticket.priority] || 'Medium' },
+      project:     { key: jiraProjectKey },
+      summary:     ticket.title,
+      description: { type: 'doc', version: 1, content: descriptionParts },
+      issuetype:   { name: issueTypeMap[ticket.type] || 'Task' },
+      priority:    { name: priorityMap[ticket.priority] || 'Medium' },
     },
   };
 
@@ -77,16 +78,26 @@ export async function createJiraTicket(ticket, settings) {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Basic ${credentials}`,
+      'Authorization': `Basic ${credentials}`,
     },
     body: JSON.stringify(payload),
   });
 
   if (!response.ok) {
-    const err = await response.json().catch(() => ({}));
-    const messages = err.errors
-      ? Object.values(err.errors).join(', ')
-      : err.errorMessages?.join(', ') || `HTTP ${response.status}`;
+    const errText = await response.text().catch(() => '');
+    let messages = `HTTP ${response.status}`;
+    try {
+      const err = JSON.parse(errText);
+      if (err.errors && Object.keys(err.errors).length) {
+        messages = Object.values(err.errors).join(', ');
+      } else if (err.errorMessages?.length) {
+        messages = err.errorMessages.join(', ');
+      } else if (err.message) {
+        messages = err.message;
+      }
+    } catch {
+      // keep generic message
+    }
     throw new Error(`JIRA error: ${messages}`);
   }
 

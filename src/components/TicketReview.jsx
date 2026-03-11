@@ -125,16 +125,22 @@ export function TicketReview({ state, dispatch }) {
       </div>
 
       <div className="screen-footer" style={{ display: 'flex', gap: 8 }}>
-        <Button fullWidth loading={jira.loading} disabled={isSubmitting || !title}
+        <Button
+          loading={jira.loading} disabled={isSubmitting || !title}
           icon={jira.done ? ExternalLink : Send}
           variant={jira.done ? 'secondary' : 'primary'}
-          onClick={handleJira}>
+          onClick={handleJira}
+          style={{ flex: 1, minWidth: 0, flexShrink: 1 }}
+        >
           {jira.done ? 'Re-submit JIRA' : 'JIRA Ticket'}
         </Button>
-        <Button fullWidth loading={pb.loading} disabled={isSubmitting || !title}
+        <Button
+          loading={pb.loading} disabled={isSubmitting || !title}
           icon={pb.done ? ExternalLink : Send}
           variant={pb.done ? 'secondary' : 'accent'}
-          onClick={handlePB}>
+          onClick={handlePB}
+          style={{ flex: 1, minWidth: 0, flexShrink: 1 }}
+        >
           {pb.done ? 'Re-submit PB' : 'Productboard'}
         </Button>
       </div>
