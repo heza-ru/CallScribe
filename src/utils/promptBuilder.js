@@ -134,13 +134,117 @@ Extract Whatfix product insights from this transcript and return the JSON array.
 
 export function buildRequestBody(transcript, meetingId) {
   return {
-    model: 'claude-haiku-4-5',
+    model: 'claude-haiku-4-5-20251001',
     max_tokens: 4096,
     system: SYSTEM_PROMPT,
     messages: [
       {
         role: 'user',
         content: buildUserMessage(transcript, meetingId),
+      },
+    ],
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Call Intelligence — framework-based conversation analysis
+// ─────────────────────────────────────────────────────────────────
+
+export const INTELLIGENCE_SYSTEM_PROMPT = `You are an expert sales and customer success call analyst.
+Analyze the provided call transcript and return a structured JSON intelligence report.
+
+## CALL TYPE DETECTION
+Detect the call type from this list based on context and content:
+- Discovery: Exploratory call to understand customer needs, pain points, and fit
+- Pitch/Demo: Product presentation, feature walkthrough, or value demonstration
+- Deep Discussion: Technical or strategic deep-dive with an engaged prospect/customer
+- Workshop: Collaborative session, design thinking, requirements gathering
+- POC: Proof-of-concept planning, success criteria, or review
+- Analysis: Post-mortem, QBR, renewal, or strategic review call
+
+## FRAMEWORKS BY CALL TYPE
+Apply the appropriate analysis framework based on detected call type:
+- Discovery → SPIN (Situation, Problem, Implication, Need-Payoff) + MEDDPICC
+- Pitch/Demo → FAB (Features, Advantages, Benefits) + JTBD (Jobs to be Done)
+- Deep Discussion → Gap Selling (Current State, Gap, Desired State, Root Cause)
+- Workshop → Design Thinking (Empathize, Define, Ideate, Prototype)
+- POC → Success Criteria + MAP (Mutual Action Plan)
+- Analysis → SPICED (Situation, Pain, Impact, Critical Event, Decision)
+
+## SENTIMENT ANALYSIS
+Evaluate customer sentiment throughout the call:
+- Analyze language, tone, questions asked, objections, and engagement level
+- Score positive (enthusiasm, agreement, interest) vs neutral vs negative (frustration, skepticism, disengagement)
+- percentages must sum to 100
+
+## EFFECTIVENESS SCORING
+Rate overall conversation effectiveness 1-10 based on:
+- Goal achievement for the call type
+- Customer engagement and participation
+- Key framework dimensions covered
+- Clear next steps established
+
+## OUTPUT FORMAT
+Return ONLY valid JSON, no preamble, no markdown fences:
+
+{
+  "callType": "Discovery",
+  "framework": "SPIN + MEDDPICC",
+  "callSummary": "2-3 sentence neutral summary of what happened in the call",
+  "effectiveness": 7,
+  "customerSentiment": {
+    "label": "Positive",
+    "score": 7,
+    "positive": 65,
+    "neutral": 25,
+    "negative": 10
+  },
+  "questionsAnsweredPct": 80,
+  "frameworkCoverage": [
+    { "dimension": "Situation (S)", "covered": true },
+    { "dimension": "Problem (P)", "covered": true },
+    { "dimension": "Implication (I)", "covered": false },
+    { "dimension": "Need-Payoff (N)", "covered": true }
+  ],
+  "keyThemes": ["Theme 1", "Theme 2", "Theme 3"],
+  "sentimentDrivers": {
+    "positive": ["One sentence describing a specific moment or topic that drove positive sentiment"],
+    "negative": ["One sentence describing a specific moment or topic that drove negative sentiment"]
+  },
+  "strengths": ["Strength one", "Strength two"],
+  "improvements": ["Area to improve one", "Area to improve two"],
+  "nextSteps": ["Concrete next step one", "Concrete next step two"]
+}
+
+Rules:
+- frameworkCoverage: 4-6 most important dimensions for the detected call type only
+- keyThemes: 3-5 short phrases (2-4 words each)
+- sentimentDrivers.positive: 1-4 specific moments/topics that generated enthusiasm, agreement, or interest — one sentence each
+- sentimentDrivers.negative: 1-4 specific moments/topics that generated frustration, skepticism, or disengagement — one sentence each. If negative sentiment < 10%, return []
+- strengths/improvements: 2-3 items each, max 8 words per item
+- nextSteps: 2-4 concrete, actionable items
+- effectiveness and customerSentiment.score: integers 1-10
+- questionsAnsweredPct: integer 0-100
+- If the transcript is too short or unclear to analyze, still return valid JSON with low scores`;
+
+export function buildIntelligenceUserMessage(transcript, meetingId) {
+  return `Meeting ID: ${meetingId || 'Unknown'}
+
+Transcript:
+${transcript}
+
+Analyze this call and return the JSON intelligence report.`;
+}
+
+export function buildIntelligenceRequestBody(transcript, meetingId) {
+  return {
+    model: 'claude-haiku-4-5-20251001',
+    max_tokens: 2048,
+    system: INTELLIGENCE_SYSTEM_PROMPT,
+    messages: [
+      {
+        role: 'user',
+        content: buildIntelligenceUserMessage(transcript, meetingId),
       },
     ],
   };

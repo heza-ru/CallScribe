@@ -1,93 +1,52 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import {
-  ArrowLeft, Bug, Zap, MessageSquare, Lightbulb, ListTodo,
-  ExternalLink, Pencil, X, RefreshCw, ChevronDown,
-  ListChecks, Layers, Info,
+  Bug, Zap, MessageSquare, Lightbulb, ListTodo,
+  ExternalLink, Pencil, X, RefreshCw, LayoutList,
+  BarChart2, ArrowRight, AlertTriangle,
 } from 'lucide-react';
-import { Button } from './ui/Button';
-import { IconButton } from './ui/IconButton';
-import { Badge } from './ui/Badge';
-import { SCREENS } from '../constants';
-import { analyzeTranscript } from '../services/claudeService';
+import { analyzeTranscript, analyzeCallIntelligence } from '../services/claudeService';
 import { createJiraTicket } from '../services/jiraService';
 import { createProductboardInsight } from '../services/productboardService';
+import { SCREENS } from '../constants';
+
+const ORANGE = '#E55014';
+const NAVY   = '#0D1726';
 
 const TYPE_META = {
-  bug:         { icon: Bug,           bg: '#fef2f2', color: '#dc2626', label: 'Bug' },
-  feature:     { icon: Zap,           bg: '#EFF6FF', color: '#2563EB', label: 'Feature' },
-  pain:        { icon: MessageSquare, bg: '#fffbeb', color: '#d97706', label: 'Pain Point' },
-  improvement: { icon: Lightbulb,     bg: '#f0fdf4', color: '#16a34a', label: 'Improvement' },
-  action:      { icon: ListTodo,      bg: '#f0f9ff', color: '#0369a1', label: 'Action Item' },
+  bug:         { icon: Bug,           color: '#dc2626', bg: '#fef2f2', label: 'Bug' },
+  feature:     { icon: Zap,           color: ORANGE,    bg: '#FFF4EF', label: 'Feature' },
+  pain:        { icon: MessageSquare, color: '#d97706', bg: '#fffbeb', label: 'Pain Point' },
+  improvement: { icon: Lightbulb,     color: '#16a34a', bg: '#f0fdf4', label: 'Improvement' },
+  action:      { icon: ListTodo,      color: '#6366f1', bg: '#eef2ff', label: 'Action' },
 };
 
-// Route insights to the right creation platform
 const JIRA_TYPES = new Set(['bug', 'improvement', 'action']);
 const PB_TYPES   = new Set(['feature', 'pain']);
 
-// ──────────────────────────────────────────────
-// Tiny icon-only action button used inside cards
-// ──────────────────────────────────────────────
-function Btn({ children, onClick, hoverColor = '#999', title, style = {} }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      title={title}
-      style={{
-        background: 'none', border: 'none', cursor: 'pointer',
-        color: '#ccc', padding: '4px', borderRadius: 5,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        transition: 'color 130ms ease', flexShrink: 0,
-        ...style,
-      }}
-      onMouseEnter={(e) => (e.currentTarget.style.color = hoverColor)}
-      onMouseLeave={(e) => (e.currentTarget.style.color = '#ccc')}
-    >
-      {children}
-    </button>
-  );
-}
+const PRIORITY_ORDER = { critical: 0, high: 1, medium: 2, low: 3 };
+const PRIORITY_COLORS = {
+  critical: { bg: ORANGE,    color: '#fff' },
+  high:     { bg: '#f97316', color: '#fff' },
+  medium:   { bg: '#f59e0b', color: '#fff' },
+  low:      { bg: '#6b7280', color: '#fff' },
+};
 
-// ──────────────────────────────────────────────
-// Section divider with icon + label + count
-// ──────────────────────────────────────────────
-function SectionHeader({ icon: Icon, iconColor, iconBg, title, count }) {
-  return (
-    <div style={{
-      display: 'flex', alignItems: 'center', gap: 7,
-      paddingTop: 10, paddingBottom: 4,
-    }}>
-      <div style={{
-        width: 20, height: 20, borderRadius: 5, background: iconBg,
-        display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-      }}>
-        <Icon size={10} style={{ color: iconColor }} strokeWidth={2.5} />
-      </div>
-      <span style={{
-        fontSize: 10.5, fontWeight: 700, color: '#555',
-        textTransform: 'uppercase', letterSpacing: '0.08em', whiteSpace: 'nowrap',
-      }}>
-        {title}
-      </span>
-      <span style={{ fontSize: 10, fontWeight: 600, color: '#bbb' }}>· {count}</span>
-      <div style={{ flex: 1, height: 1, background: '#ebebeb', marginLeft: 2 }} />
-    </div>
-  );
-}
+const TABS = [
+  { key: 'all',      label: 'All' },
+  { key: 'priority', label: 'Priority' },
+  { key: 'type',     label: 'Type' },
+];
 
-// ──────────────────────────────────────────────
-// Individual insight card
-// ──────────────────────────────────────────────
-function InsightCard({ insight, meetingId, settings, onEdit, primaryAction }) {
+function InsightCard({ insight, meetingId, settings, onEdit, onDismiss, delay = 0 }) {
   const [jira, setJira] = useState({ loading: false, done: false, url: null, error: null });
   const [pb,   setPb]   = useState({ loading: false, done: false, url: null, error: null });
   const [open, setOpen] = useState(false);
-  const [gone, setGone] = useState(false);
 
-  const meta = TYPE_META[insight.type] || TYPE_META.improvement;
-  const Icon = meta.icon;
-
-  if (gone) return null;
+  const meta   = TYPE_META[insight.type] || TYPE_META.improvement;
+  const TypeIcon = meta.icon;
+  const isBusy = jira.loading || pb.loading;
+  const prio   = (insight.priority || 'medium').toLowerCase();
+  const prioStyle = PRIORITY_COLORS[prio] || PRIORITY_COLORS.medium;
 
   async function handleJira() {
     setJira({ loading: true, done: false, url: null, error: null });
@@ -109,183 +68,260 @@ function InsightCard({ insight, meetingId, settings, onEdit, primaryAction }) {
     }
   }
 
-  const isBusy = jira.loading || pb.loading;
-
   return (
-    <div
-      className="anim-slide-up"
-      style={{
-        background: '#fff',
-        borderRadius: 10,
-        boxShadow: 'var(--shadow-card)',
-        overflow: 'hidden',
-        transition: 'box-shadow 130ms ease',
+    <div style={{
+      background: '#fff',
+      borderRadius: 10,
+      border: '1px solid #E4E9F0',
+      borderLeft: `3px solid ${meta.color}`,
+      overflow: 'hidden',
+      transition: 'border-color 150ms, box-shadow 150ms, transform 150ms',
+      animation: 'itemEnter 240ms cubic-bezier(0.22,1,0.36,1) both',
+      animationDelay: `${delay}ms`,
+    }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.boxShadow = '0 4px 12px rgba(13,23,38,0.08)';
+        e.currentTarget.style.transform = 'translateY(-1px)';
       }}
-      onMouseEnter={(e) => (e.currentTarget.style.boxShadow = 'var(--shadow-lift)')}
-      onMouseLeave={(e) => (e.currentTarget.style.boxShadow = 'var(--shadow-card)')}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.boxShadow = 'none';
+        e.currentTarget.style.transform = 'translateY(0)';
+      }}
     >
-      {/* ── Header row ── */}
-      <div
-        style={{
-          display: 'flex', alignItems: 'flex-start', gap: 9,
-          padding: '10px 11px', cursor: 'pointer',
-        }}
-        onClick={() => setOpen((v) => !v)}
-      >
-        {/* Type icon */}
-        <div style={{
-          width: 24, height: 24, borderRadius: 6, background: meta.bg,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          flexShrink: 0, marginTop: 1,
-        }}>
-          <Icon size={11} style={{ color: meta.color }} strokeWidth={2.5} />
+      <div style={{ padding: '10px 12px' }}>
+
+        {/* Top row: badges + actions */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 7 }}>
+          <div style={{ display: 'flex', gap: 5, alignItems: 'center', minWidth: 0 }}>
+            <span style={{
+              fontSize: 9, fontWeight: 800, color: '#fff',
+              background: prioStyle.bg, padding: '2px 6px',
+              borderRadius: 4, textTransform: 'uppercase', letterSpacing: '0.05em',
+              flexShrink: 0,
+            }}>
+              {prio}
+            </span>
+            <span style={{
+              display: 'flex', alignItems: 'center', gap: 3,
+              fontSize: 9, fontWeight: 700, color: meta.color,
+              background: meta.bg, padding: '2px 6px',
+              borderRadius: 4, textTransform: 'uppercase', letterSpacing: '0.05em',
+              flexShrink: 0,
+            }}>
+              <TypeIcon size={9} strokeWidth={2.5} />
+              {meta.label}
+            </span>
+          </div>
+          <div style={{ display: 'flex', gap: 1, flexShrink: 0 }}>
+            <button type="button" title="Edit"
+              onClick={() => onEdit(insight)}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '3px 4px', borderRadius: 5, color: '#C8D2DE', display: 'flex', transition: 'color 120ms' }}
+              onMouseEnter={(e) => (e.currentTarget.style.color = '#4B5A6D')}
+              onMouseLeave={(e) => (e.currentTarget.style.color = '#C8D2DE')}
+            ><Pencil size={11} /></button>
+            <button type="button" title="Dismiss"
+              onClick={() => onDismiss(insight.id)}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '3px 4px', borderRadius: 5, color: '#C8D2DE', display: 'flex', transition: 'color 120ms' }}
+              onMouseEnter={(e) => (e.currentTarget.style.color = '#dc2626')}
+              onMouseLeave={(e) => (e.currentTarget.style.color = '#C8D2DE')}
+            ><X size={11} /></button>
+          </div>
         </div>
 
-        {/* Title + badges */}
-        <div style={{ flex: 1, minWidth: 0 }}>
+        {/* Title */}
+        <div
+          onClick={() => setOpen(v => !v)}
+          style={{ cursor: 'pointer', marginBottom: 5 }}
+        >
           <div style={{
-            fontSize: 12, fontWeight: 600, lineHeight: 1.4, color: '#111',
-            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            fontSize: 12, fontWeight: 700, color: NAVY,
+            lineHeight: 1.4,
           }}>
             {insight.title}
           </div>
-          <div style={{ display: 'flex', gap: 4, marginTop: 4, flexWrap: 'wrap' }}>
-            <Badge type={insight.type} label={meta.label} />
-            <Badge type={insight.priority.toLowerCase()} label={insight.priority} />
-            {insight.productArea && (
-              <Badge type="default" label={insight.productArea} />
-            )}
-          </div>
         </div>
 
-        {/* Action icons */}
-        <div style={{ display: 'flex', gap: 0, flexShrink: 0, marginTop: 1 }}>
-          <Btn onClick={(e) => { e.stopPropagation(); onEdit(insight); }} hoverColor="#2b21ba" title="Edit ticket">
-            <Pencil size={11} />
-          </Btn>
-          <Btn onClick={(e) => { e.stopPropagation(); setGone(true); }} hoverColor="#dc2626" title="Dismiss">
-            <X size={11} />
-          </Btn>
-          <Btn
-            style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 180ms ease' }}
-            onClick={(e) => { e.stopPropagation(); setOpen((v) => !v); }}
-            title={open ? 'Collapse' : 'Expand'}
-          >
-            <ChevronDown size={11} />
-          </Btn>
-        </div>
-      </div>
-
-      {/* ── Expanded body ── */}
-      {open && (
-        <div
-          className="anim-slide-up"
-          style={{
-            borderTop: '1px solid #f0f0f0',
-            padding: '9px 11px 10px',
-            display: 'flex', flexDirection: 'column', gap: 8,
-          }}
-        >
+        {/* Description */}
+        {insight.description && (
           <p style={{
-            fontSize: 11.5, color: 'var(--color-text-secondary)',
-            lineHeight: 1.6, margin: 0,
+            margin: '0 0 8px', fontSize: 11.5, color: '#4B5A6D', lineHeight: 1.6,
+            display: open ? 'block' : '-webkit-box',
+            WebkitLineClamp: open ? undefined : 2,
+            WebkitBoxOrient: 'vertical',
+            overflow: open ? 'visible' : 'hidden',
           }}>
             {insight.description}
           </p>
+        )}
 
-          {/* Error banners */}
-          {jira.error && (
-            <div style={{
-              fontSize: 11, color: '#dc2626', background: '#fef2f2',
-              padding: '5px 9px', borderRadius: 6, lineHeight: 1.45,
-            }}>
-              JIRA: {jira.error}
-            </div>
-          )}
-          {pb.error && (
-            <div style={{
-              fontSize: 11, color: '#dc2626', background: '#fef2f2',
-              padding: '5px 9px', borderRadius: 6, lineHeight: 1.45,
-            }}>
-              Productboard: {pb.error}
-            </div>
-          )}
-
-          {/* Create buttons */}
-          <div style={{ display: 'flex', gap: 5 }}>
-            {/* JIRA button */}
-            {jira.done ? (
-              <a
-                href={jira.url} target="_blank" rel="noopener noreferrer"
-                style={{
-                  flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  gap: 4, fontSize: 11, fontWeight: 600, color: '#16a34a',
-                  textDecoration: 'none', background: '#f0fdf4',
-                  padding: '6px 8px', borderRadius: 6,
-                }}
-              >
-                <ExternalLink size={10} /> JIRA ✓
-              </a>
-            ) : (
-              <Button
-                size="xs"
-                variant={primaryAction === 'jira' ? 'primary' : 'secondary'}
-                loading={jira.loading}
-                disabled={isBusy}
-                onClick={handleJira}
-                style={{ flex: 1, flexShrink: 1 }}
-              >
-                {jira.loading ? 'Creating…' : 'Create JIRA'}
-              </Button>
-            )}
-
-            {/* Productboard button */}
-            {pb.done ? (
-              <a
-                href={pb.url} target="_blank" rel="noopener noreferrer"
-                style={{
-                  flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  gap: 4, fontSize: 11, fontWeight: 600, color: '#16a34a',
-                  textDecoration: 'none', background: '#f0fdf4',
-                  padding: '6px 8px', borderRadius: 6,
-                }}
-              >
-                <ExternalLink size={10} /> PB ✓
-              </a>
-            ) : (
-              <Button
-                size="xs"
-                variant={primaryAction === 'pb' ? 'accent' : 'secondary'}
-                loading={pb.loading}
-                disabled={isBusy}
-                onClick={handlePB}
-                style={{ flex: 1, flexShrink: 1 }}
-              >
-                {pb.loading ? 'Creating…' : 'Productboard'}
-              </Button>
-            )}
+        {/* Errors */}
+        {(jira.error || pb.error) && (
+          <div style={{ fontSize: 11, color: '#dc2626', background: '#fef2f2', padding: '5px 9px', borderRadius: 6, marginBottom: 8 }}>
+            {jira.error || pb.error}
           </div>
+        )}
+
+        {/* Action buttons */}
+        <div style={{ display: 'flex', gap: 6 }}>
+          {JIRA_TYPES.has(insight.type) && (
+            jira.done
+              ? <a href={jira.url} target="_blank" rel="noopener noreferrer" style={{
+                  flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
+                  fontSize: 10, fontWeight: 700, color: '#16a34a', textDecoration: 'none',
+                  background: '#f0fdf4', padding: '6px 8px', borderRadius: 6,
+                  border: '1px solid #dcfce7', textTransform: 'uppercase', letterSpacing: '0.04em',
+                }}>
+                  <ExternalLink size={10} /> View JIRA
+                </a>
+              : <button type="button" onClick={handleJira} disabled={isBusy}
+                  style={{
+                    flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
+                    padding: '6px 8px', borderRadius: 6, border: 'none',
+                    background: NAVY, color: '#fff',
+                    fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em',
+                    cursor: isBusy ? 'not-allowed' : 'pointer', opacity: isBusy ? 0.6 : 1,
+                    whiteSpace: 'nowrap',
+                  }}>
+                  {jira.loading && <span style={{ width: 9, height: 9, border: '1.5px solid rgba(255,255,255,0.3)', borderTopColor: '#fff', borderRadius: '50%', animation: 'spin 0.7s linear infinite', display: 'inline-block', flexShrink: 0 }} />}
+                  {jira.loading ? 'Creating…' : 'JIRA'}
+                </button>
+          )}
+          {PB_TYPES.has(insight.type) && (
+            pb.done
+              ? <a href={pb.url} target="_blank" rel="noopener noreferrer" style={{
+                  flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
+                  fontSize: 10, fontWeight: 700, color: '#16a34a', textDecoration: 'none',
+                  background: '#f0fdf4', padding: '6px 8px', borderRadius: 6,
+                  border: '1px solid #dcfce7', textTransform: 'uppercase', letterSpacing: '0.04em',
+                }}>
+                  <ExternalLink size={10} /> View PB
+                </a>
+              : <button type="button" onClick={handlePB} disabled={isBusy}
+                  style={{
+                    flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
+                    padding: '6px 8px', borderRadius: 6, border: '1px solid #E4E9F0',
+                    background: '#fff', color: NAVY,
+                    fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em',
+                    cursor: isBusy ? 'not-allowed' : 'pointer', opacity: isBusy ? 0.6 : 1,
+                    whiteSpace: 'nowrap',
+                  }}>
+                  {pb.loading && <span style={{ width: 9, height: 9, border: '1.5px solid #C8D2DE', borderTopColor: NAVY, borderRadius: '50%', animation: 'spin 0.7s linear infinite', display: 'inline-block', flexShrink: 0 }} />}
+                  {pb.loading ? 'Creating…' : 'Productboard'}
+                </button>
+          )}
+          {(JIRA_TYPES.has(insight.type) || PB_TYPES.has(insight.type)) && !jira.done && !pb.done && (
+            <button type="button"
+              onClick={JIRA_TYPES.has(insight.type) ? handleJira : handlePB}
+              disabled={isBusy}
+              style={{
+                flex: 2, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
+                padding: '6px 10px', borderRadius: 6, border: 'none',
+                background: ORANGE, color: '#fff',
+                fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em',
+                cursor: isBusy ? 'not-allowed' : 'pointer', opacity: isBusy ? 0.6 : 1,
+                whiteSpace: 'nowrap',
+              }}>
+              Push <ArrowRight size={9} />
+            </button>
+          )}
         </div>
-      )}
+      </div>
     </div>
   );
 }
 
-// ──────────────────────────────────────────────
-// Main screen
-// ──────────────────────────────────────────────
+function GroupHeader({ label, color, count }) {
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 8,
+      padding: '4px 0 2px',
+    }}>
+      <div style={{ width: 8, height: 8, borderRadius: 2, background: color, flexShrink: 0 }} />
+      <span style={{ fontSize: 10, fontWeight: 800, color: NAVY, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+        {label}
+      </span>
+      <span style={{ fontSize: 10, fontWeight: 600, color: '#A8B4C0' }}>{count}</span>
+    </div>
+  );
+}
+
 export function AnalysisScreen({ state, dispatch }) {
+  const [activeTab,   setTab]        = useState('all');
   const [reanalyzing, setReanalyzing] = useState(false);
-  const [error, setError] = useState(null);
+  const [error,       setError]       = useState(null);
+  const [dismissed,   setDismissed]   = useState(new Set());
+
+  const insights = (state.insights || []).filter(i => !dismissed.has(i.id));
+
+  // Build display list based on active tab
+  function buildDisplayList() {
+    if (activeTab === 'all') {
+      return { type: 'flat', items: insights };
+    }
+
+    if (activeTab === 'priority') {
+      const sorted = [...insights].sort((a, b) => {
+        const ao = PRIORITY_ORDER[(a.priority || 'medium').toLowerCase()] ?? 2;
+        const bo = PRIORITY_ORDER[(b.priority || 'medium').toLowerCase()] ?? 2;
+        return ao - bo;
+      });
+      // Group into sections
+      const groups = {};
+      sorted.forEach(i => {
+        const p = (i.priority || 'medium').toLowerCase();
+        if (!groups[p]) groups[p] = [];
+        groups[p].push(i);
+      });
+      const sections = ['critical', 'high', 'medium', 'low']
+        .filter(p => groups[p]?.length)
+        .map(p => ({
+          key: p,
+          label: p.charAt(0).toUpperCase() + p.slice(1),
+          color: PRIORITY_COLORS[p]?.bg || '#6b7280',
+          items: groups[p],
+        }));
+      return { type: 'grouped', sections };
+    }
+
+    if (activeTab === 'type') {
+      const typeOrder = ['bug', 'feature', 'pain', 'improvement', 'action'];
+      const groups = {};
+      insights.forEach(i => {
+        const t = i.type || 'improvement';
+        if (!groups[t]) groups[t] = [];
+        groups[t].push(i);
+      });
+      const sections = typeOrder
+        .filter(t => groups[t]?.length)
+        .map(t => ({
+          key: t,
+          label: TYPE_META[t]?.label || t,
+          color: TYPE_META[t]?.color || ORANGE,
+          items: groups[t],
+        }));
+      return { type: 'grouped', sections };
+    }
+
+    return { type: 'flat', items: insights };
+  }
+
+  const display = buildDisplayList();
 
   async function handleReanalyze() {
     setError(null);
     setReanalyzing(true);
+    const { transcript, meetingId, settings } = state;
+    const apiKey = settings?.claudeApiKey;
+
+    dispatch({ type: 'CALL_INTELLIGENCE_LOADING' });
+    analyzeCallIntelligence(transcript, meetingId, apiKey)
+      .then(ci => dispatch({ type: 'CALL_INTELLIGENCE_LOADED', callIntelligence: ci }))
+      .catch(() => dispatch({ type: 'CALL_INTELLIGENCE_FAILED' }));
+
     try {
-      const insights = await analyzeTranscript(
-        state.transcript, state.meetingId, state.settings?.claudeApiKey
-      );
-      dispatch({ type: 'INSIGHTS_LOADED', insights });
+      const newInsights = await analyzeTranscript(transcript, meetingId, apiKey);
+      dispatch({ type: 'INSIGHTS_LOADED', insights: newInsights });
+      setDismissed(new Set());
     } catch (err) {
       setError(err.message);
     } finally {
@@ -293,159 +329,160 @@ export function AnalysisScreen({ state, dispatch }) {
     }
   }
 
-  const insights = state.insights || [];
-
-  // Split into two tracks
-  const jiraTrack = insights.filter((i) => JIRA_TYPES.has(i.type));
-  const pbTrack   = insights.filter((i) => PB_TYPES.has(i.type));
-
-  const totalCount = insights.length;
-
   return (
-    <div className="screen">
+    <div style={{
+      display: 'flex', flexDirection: 'column',
+      flex: 1, height: '100vh', overflow: 'hidden',
+      background: '#F5F7FA',
+    }}>
+
       {/* Header */}
-      <div className="screen-header anim-fade-in">
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <IconButton
-            icon={ArrowLeft} title="Back"
-            onClick={() => dispatch({ type: 'SET_SCREEN', screen: SCREENS.TRANSCRIPT_ACTIONS })}
-          />
-          <div>
-            <div className="text-title">Analysis</div>
-            <div className="text-meta">
-              {totalCount} insight{totalCount !== 1 ? 's' : ''}
-              {jiraTrack.length > 0 && pbTrack.length > 0
-                ? ` · ${jiraTrack.length} JIRA · ${pbTrack.length} PB`
-                : ''}
-            </div>
-          </div>
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        padding: '14px 16px 12px',
+        background: '#fff', borderBottom: '1px solid #E4E9F0',
+        flexShrink: 0,
+      }}>
+        <div style={{ fontSize: 13, fontWeight: 900, color: NAVY, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+          Product Gaps
         </div>
-        <IconButton
-          icon={RefreshCw} title="Re-analyze" disabled={reanalyzing}
-          style={{ animation: reanalyzing ? 'spin 1s linear infinite' : 'none' }}
-          onClick={handleReanalyze}
-        />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          {state.callIntelligence && (
+            <button type="button"
+              onClick={() => dispatch({ type: 'SET_SCREEN', screen: SCREENS.INTELLIGENCE })}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 5,
+                padding: '5px 10px', borderRadius: 7,
+                background: '#F5F7FA', border: '1px solid #E4E9F0',
+                cursor: 'pointer', fontSize: 11, fontWeight: 700,
+                color: NAVY, textTransform: 'uppercase', letterSpacing: '0.06em',
+                transition: 'background 130ms',
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = '#ECF0F5')}
+              onMouseLeave={(e) => (e.currentTarget.style.background = '#F5F7FA')}
+            >
+              <BarChart2 size={12} strokeWidth={2} />
+              Insights
+            </button>
+          )}
+          <button type="button"
+            onClick={handleReanalyze}
+            title="Re-analyze"
+            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 6, borderRadius: 6, display: 'flex', color: '#8A97A8' }}
+            onMouseEnter={(e) => (e.currentTarget.style.color = ORANGE)}
+            onMouseLeave={(e) => (e.currentTarget.style.color = '#8A97A8')}
+          >
+            <RefreshCw size={15} strokeWidth={2}
+              style={{ animation: reanalyzing ? 'spin 1s linear infinite' : 'none' }} />
+          </button>
+        </div>
       </div>
 
-      {/* Status */}
+      {/* Tab bar */}
+      <div style={{
+        display: 'flex', flexShrink: 0,
+        background: '#fff', borderBottom: '1px solid #E4E9F0',
+        padding: '0 16px',
+      }}>
+        {TABS.map(({ key, label }) => {
+          const active = activeTab === key;
+          return (
+            <button key={key} type="button" onClick={() => setTab(key)}
+              style={{
+                padding: '10px 14px 9px', background: 'none', border: 'none',
+                cursor: 'pointer', fontSize: 11, fontWeight: active ? 800 : 600,
+                color: active ? NAVY : '#8A97A8',
+                textTransform: 'uppercase', letterSpacing: '0.08em',
+                borderBottom: active ? `2px solid ${ORANGE}` : '2px solid transparent',
+                transition: 'color 120ms, border-color 120ms',
+                marginBottom: -1,
+              }}
+              onMouseEnter={(e) => { if (!active) e.currentTarget.style.color = NAVY; }}
+              onMouseLeave={(e) => { if (!active) e.currentTarget.style.color = '#8A97A8'; }}
+            >
+              {label}
+            </button>
+          );
+        })}
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', paddingBottom: 1 }}>
+          <span style={{ fontSize: 10, fontWeight: 600, color: '#A8B4C0' }}>
+            {insights.length} item{insights.length !== 1 ? 's' : ''}
+          </span>
+        </div>
+      </div>
+
       {error && (
-        <div className="banner error" style={{ margin: '8px 14px 0' }}>{error}</div>
-      )}
-      {reanalyzing && (
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: 7,
-          fontSize: 12, color: '#2563EB', padding: '8px 14px 0',
-        }}>
-          <span style={{
-            width: 12, height: 12, flexShrink: 0,
-            border: '1.5px solid #ddd', borderTopColor: '#2563EB',
-            borderRadius: '50%', animation: 'spin 0.7s linear infinite',
-            display: 'inline-block',
-          }} />
-          Re-analyzing with Claude…
+        <div className="banner error" style={{ margin: '6px 14px 0', flexShrink: 0 }}>
+          <AlertTriangle size={12} style={{ flexShrink: 0 }} />
+          {error}
         </div>
       )}
 
-      {/* Scrollable card list */}
-      <div
-        className="screen-body"
-        style={{ paddingTop: 4, paddingBottom: 20, gap: 5 }}
-      >
-        {insights.length === 0 && !reanalyzing && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, paddingTop: 8 }}>
+      {/* Card list */}
+      <div key={activeTab} style={{
+        flex: 1, minHeight: 0,
+        overflowY: 'auto', padding: '12px 14px 20px',
+        display: 'flex', flexDirection: 'column', gap: 8,
+        animation: 'tabEnter 200ms cubic-bezier(0.22,1,0.36,1) both',
+      }}>
+        {insights.length === 0 && !reanalyzing ? (
+          <div style={{ textAlign: 'center', padding: '40px 16px' }}>
             <div style={{
-              textAlign: 'center', padding: '32px 20px',
-              background: '#f6f6f8', borderRadius: 12,
-              boxShadow: 'var(--shadow-card)',
+              width: 44, height: 44, borderRadius: 12, background: '#F5F7FA',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px',
             }}>
-              <div style={{ fontSize: 28, marginBottom: 10 }}>🔍</div>
-              <div className="text-heading" style={{ fontSize: 13, marginBottom: 6 }}>No product insights found</div>
-              <div className="text-meta" style={{ lineHeight: 1.6, maxWidth: 260, margin: '0 auto' }}>
-                Claude looked for Whatfix bugs, feature requests, pain points, and improvements but found nothing actionable in this transcript.
-              </div>
+              <LayoutList size={20} style={{ color: '#A8B4C0' }} />
             </div>
-            <div style={{
-              padding: '10px 13px', borderRadius: 10,
-              background: '#f5f3ff', boxShadow: '0 0 0 1px rgba(43,33,186,0.10)',
-              fontSize: 11, color: '#555', lineHeight: 1.6,
-              display: 'flex', gap: 8, alignItems: 'flex-start',
-            }}>
-              <Info size={12} style={{ color: '#2563EB', flexShrink: 0, marginTop: 1 }} />
-              <span>
-                This may be a call focused on scheduling, professional services, or general account management.
-                Try a call where the customer discusses product usage, issues, or requests.
-              </span>
+            <div style={{ fontSize: 13, fontWeight: 800, color: NAVY, marginBottom: 5, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+              No Insights Found
             </div>
+            <div style={{ fontSize: 11.5, color: '#8A97A8', lineHeight: 1.6, maxWidth: 220, margin: '0 auto 14px' }}>
+              Try re-analyzing or use a call where the customer discusses product issues.
+            </div>
+            <button type="button" onClick={handleReanalyze}
+              style={{
+                padding: '0 16px', height: 36, borderRadius: 7, border: 'none',
+                background: ORANGE, color: '#fff',
+                cursor: 'pointer', fontSize: 11, fontWeight: 700,
+                textTransform: 'uppercase', letterSpacing: '0.06em',
+              }}>
+              Re-analyze
+            </button>
           </div>
-        )}
-
-        {/* ── JIRA track: bugs · improvements · actions ── */}
-        {jiraTrack.length > 0 && (
-          <>
-            <SectionHeader
-              icon={ListChecks} iconColor="#2563EB" iconBg="#EFF6FF"
-              title="JIRA Tickets" count={jiraTrack.length}
-            />
-            {jiraTrack.map((insight) => (
-              <InsightCard
-                key={insight.id}
-                insight={insight}
-                meetingId={state.meetingId}
-                settings={state.settings}
-                primaryAction="jira"
-                onEdit={(ticket) => dispatch({ type: 'EDIT_TICKET', ticket })}
-              />
-            ))}
-          </>
-        )}
-
-        {/* ── Productboard track: features · pain points ── */}
-        {pbTrack.length > 0 && (
-          <>
-            <SectionHeader
-              icon={Layers} iconColor="#f26b3a" iconBg="#fff1eb"
-              title="Productboard" count={pbTrack.length}
-            />
-            {pbTrack.map((insight) => (
-              <InsightCard
-                key={insight.id}
-                insight={insight}
-                meetingId={state.meetingId}
-                settings={state.settings}
-                primaryAction="pb"
-                onEdit={(ticket) => dispatch({ type: 'EDIT_TICKET', ticket })}
-              />
-            ))}
-          </>
-        )}
-
-        {/* ── Bottom summary — pushed down when list is short ── */}
-        {insights.length > 0 && (
-          <div style={{ marginTop: 'auto', paddingTop: 16 }}>
-            <div style={{
-              display: 'flex', gap: 6,
-              padding: '10px 13px', borderRadius: 10,
-              background: '#f6f6f8', boxShadow: 'var(--shadow-card)',
-            }}>
-              {jiraTrack.length > 0 && (
-                <div style={{ flex: 1, textAlign: 'center', padding: '6px 0', borderRadius: 7, background: '#ede9ff' }}>
-                  <div style={{ fontSize: 15, fontWeight: 700, color: '#2b21ba' }}>{jiraTrack.length}</div>
-                  <div style={{ fontSize: 9.5, color: '#2b21ba', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>JIRA</div>
-                </div>
-              )}
-              {pbTrack.length > 0 && (
-                <div style={{ flex: 1, textAlign: 'center', padding: '6px 0', borderRadius: 7, background: '#fff1eb' }}>
-                  <div style={{ fontSize: 15, fontWeight: 700, color: '#f26b3a' }}>{pbTrack.length}</div>
-                  <div style={{ fontSize: 9.5, color: '#f26b3a', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Productboard</div>
-                </div>
-              )}
-              <div style={{ flex: 2, display: 'flex', alignItems: 'center', paddingLeft: 6 }}>
-                <span style={{ fontSize: 11, color: '#888', lineHeight: 1.45 }}>
-                  Expand a card and click <strong style={{ color: '#555' }}>Create JIRA</strong> or <strong style={{ color: '#555' }}>Productboard</strong> to submit.
-                </span>
-              </div>
-            </div>
+        ) : reanalyzing ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '12px 0', color: '#8A97A8', fontSize: 12, fontWeight: 600 }}>
+            <span style={{ width: 14, height: 14, border: '2px solid #E4E9F0', borderTopColor: ORANGE, borderRadius: '50%', animation: 'spin 0.7s linear infinite', display: 'inline-block', flexShrink: 0 }} />
+            Re-analyzing with Claude...
           </div>
+        ) : display.type === 'flat' ? (
+          display.items.map((insight, idx) => (
+            <InsightCard
+              key={insight.id}
+              insight={insight}
+              delay={Math.min(idx * 40, 320)}
+              meetingId={state.meetingId}
+              settings={state.settings}
+              onEdit={(ticket) => dispatch({ type: 'EDIT_TICKET', ticket })}
+              onDismiss={(id) => setDismissed(prev => new Set([...prev, id]))}
+            />
+          ))
+        ) : (
+          display.sections.map((section) => (
+            <div key={section.key} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <GroupHeader label={section.label} color={section.color} count={section.items.length} />
+              {section.items.map((insight, idx) => (
+                <InsightCard
+                  key={insight.id}
+                  insight={insight}
+                  delay={Math.min(idx * 40, 240)}
+                  meetingId={state.meetingId}
+                  settings={state.settings}
+                  onEdit={(ticket) => dispatch({ type: 'EDIT_TICKET', ticket })}
+                  onDismiss={(id) => setDismissed(prev => new Set([...prev, id]))}
+                />
+              ))}
+            </div>
+          ))
         )}
       </div>
     </div>

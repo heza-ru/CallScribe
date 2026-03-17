@@ -1,7 +1,8 @@
 export const SCREENS = {
-  DETECTION: 'detection',
+  DETECTION:          'detection',
   TRANSCRIPT_ACTIONS: 'transcript_actions',
-  ANALYSIS: 'analysis',
-  TICKET_REVIEW: 'ticket_review',
-  SETTINGS: 'settings',
+  ANALYSIS:           'analysis',
+  INTELLIGENCE:       'intelligence',
+  TICKET_REVIEW:      'ticket_review',
+  SETTINGS:           'settings',
 };

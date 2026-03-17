@@ -1,7 +1,9 @@
-import React, { useReducer, useEffect } from 'react';
+import { useReducer, useEffect } from 'react';
+import { AppShell } from './components/AppShell';
 import { DetectionScreen } from './components/DetectionScreen';
 import { TranscriptActions } from './components/TranscriptActions';
 import { AnalysisScreen } from './components/AnalysisScreen';
+import { IntelligenceScreen } from './components/IntelligenceScreen';
 import { TicketReview } from './components/TicketReview';
 import { Settings } from './components/Settings';
 import { SCREENS } from './constants';
@@ -9,15 +11,16 @@ import { SCREENS } from './constants';
 export { SCREENS };
 
 const initialState = {
-  screen: SCREENS.DETECTION,
-  meetingId: null,
-  token: null,
-  chunks: null,
-  transcript: null,
-  insights: [],
-  draftTicket: null,
-  settings: null,
-  error: null,
+  screen:           SCREENS.DETECTION,
+  meetingId:        null,
+  token:            null,
+  chunks:           null,
+  transcript:       null,
+  insights:         [],
+  callIntelligence: null,   // null | 'loading' | { ...data }
+  draftTicket:      null,
+  settings:         null,
+  error:            null,
 };
 
 function reducer(state, action) {
@@ -29,7 +32,13 @@ function reducer(state, action) {
     case 'TRANSCRIPT_LOADED':
       return { ...state, chunks: action.chunks, transcript: action.transcript, error: null };
     case 'INSIGHTS_LOADED':
-      return { ...state, insights: action.insights, screen: SCREENS.ANALYSIS, error: null };
+      return { ...state, insights: action.insights, error: null };
+    case 'CALL_INTELLIGENCE_LOADING':
+      return { ...state, callIntelligence: 'loading' };
+    case 'CALL_INTELLIGENCE_LOADED':
+      return { ...state, callIntelligence: action.callIntelligence };
+    case 'CALL_INTELLIGENCE_FAILED':
+      return { ...state, callIntelligence: null };
     case 'EDIT_TICKET':
       return { ...state, draftTicket: action.ticket, screen: SCREENS.TICKET_REVIEW };
     case 'TICKET_SUBMITTED':
@@ -43,7 +52,7 @@ function reducer(state, action) {
     case 'CLEAR_ERROR':
       return { ...state, error: null };
     case 'RESET_ANALYSIS':
-      return { ...state, insights: [], chunks: null, transcript: null, draftTicket: null };
+      return { ...state, insights: [], callIntelligence: null, chunks: null, transcript: null, draftTicket: null };
     default:
       return state;
   }
@@ -60,17 +69,18 @@ export default function App() {
   }, []);
 
   const { screen } = state;
-  const screenProps = { state, dispatch };
+  const props = { state, dispatch };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
-      <div key={screen} style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
-        {screen === SCREENS.DETECTION          && <DetectionScreen {...screenProps} />}
-        {screen === SCREENS.TRANSCRIPT_ACTIONS && <TranscriptActions {...screenProps} />}
-        {screen === SCREENS.ANALYSIS           && <AnalysisScreen {...screenProps} />}
-        {screen === SCREENS.TICKET_REVIEW      && <TicketReview {...screenProps} />}
-        {screen === SCREENS.SETTINGS           && <Settings {...screenProps} />}
+    <AppShell state={state} dispatch={dispatch}>
+      <div key={screen} className="anim-screen" style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
+        {screen === SCREENS.DETECTION          && <DetectionScreen    {...props} />}
+        {screen === SCREENS.TRANSCRIPT_ACTIONS && <TranscriptActions  {...props} />}
+        {screen === SCREENS.ANALYSIS           && <AnalysisScreen     {...props} />}
+        {screen === SCREENS.INTELLIGENCE       && <IntelligenceScreen {...props} />}
+        {screen === SCREENS.TICKET_REVIEW      && <TicketReview       {...props} />}
+        {screen === SCREENS.SETTINGS           && <Settings           {...props} />}
       </div>
-    </div>
+    </AppShell>
   );
 }

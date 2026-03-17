@@ -63,6 +63,43 @@ export function toJSON(chunks, meetingId) {
 }
 
 /**
+ * Convert transcript chunks to CSV.
+ */
+export function toCSV(chunks, meetingId) {
+  const { lines } = parseChunks(chunks);
+  const escape = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  const header = ['speaker', 'text', 'startTime', 'endTime'].map(escape).join(',');
+  const rows = lines.map((l) =>
+    [l.speaker, l.text, l.startTime ?? '', l.endTime ?? ''].map(escape).join(',')
+  );
+  return [header, ...rows].join('\r\n');
+}
+
+/**
+ * Convert transcript chunks to SRT subtitle format.
+ */
+export function toSRT(chunks) {
+  const { lines } = parseChunks(chunks);
+
+  function toSRTTime(secs) {
+    if (secs == null || isNaN(secs)) return '00:00:00,000';
+    const h = Math.floor(secs / 3600);
+    const m = Math.floor((secs % 3600) / 60);
+    const s = Math.floor(secs % 60);
+    const ms = Math.round((secs % 1) * 1000);
+    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')},${String(ms).padStart(3, '0')}`;
+  }
+
+  return lines
+    .map((l, i) => {
+      const start = toSRTTime(l.startTime);
+      const end = toSRTTime(l.endTime ?? (l.startTime != null ? l.startTime + 3 : null));
+      return `${i + 1}\n${start} --> ${end}\n${l.speaker}: ${l.text}`;
+    })
+    .join('\n\n');
+}
+
+/**
  * Trigger a browser download of the transcript content.
  */
 export function downloadTranscript(chunks, meetingId, format) {
@@ -78,6 +115,16 @@ export function downloadTranscript(chunks, meetingId, format) {
       content = toJSON(chunks, meetingId);
       mimeType = 'application/json';
       ext = 'json';
+      break;
+    case 'csv':
+      content = toCSV(chunks, meetingId);
+      mimeType = 'text/csv';
+      ext = 'csv';
+      break;
+    case 'srt':
+      content = toSRT(chunks);
+      mimeType = 'text/plain';
+      ext = 'srt';
       break;
     default:
       content = toTXT(chunks, meetingId);

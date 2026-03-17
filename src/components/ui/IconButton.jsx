@@ -6,8 +6,8 @@ export function IconButton({
   title,
   size = 32,
   iconSize = 16,
-  color = 'var(--color-text-secondary)',
-  hoverColor = 'var(--color-primary)',
+  color = '#8A97A8',
+  hoverColor = '#E55014',
   style = {},
   disabled = false,
 }) {

@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { ArrowLeft, Send, ExternalLink } from 'lucide-react';
-import { Button } from './ui/Button';
-import { IconButton } from './ui/IconButton';
 import { createJiraTicket } from '../services/jiraService';
 import { createProductboardInsight } from '../services/productboardService';
 import { SCREENS } from '../constants';
+
+const ORANGE = '#E55014';
+const NAVY   = '#0D1726';
 
 const PRIORITIES = ['Low', 'Medium', 'High', 'Critical'];
 const TYPES = [
@@ -30,7 +31,7 @@ export function TicketReview({ state, dispatch }) {
   function buildTicket() {
     return {
       title, description, productArea, priority, type,
-      labels: labels.split(',').map((l) => l.trim()).filter(Boolean),
+      labels: labels.split(',').map(l => l.trim()).filter(Boolean),
       meetingId: state.meetingId,
     };
   }
@@ -58,19 +59,40 @@ export function TicketReview({ state, dispatch }) {
   const isSubmitting = jira.loading || pb.loading;
 
   return (
-    <div className="screen anim-slide-in-right">
-      <div className="screen-header">
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <IconButton icon={ArrowLeft} title="Back"
-            onClick={() => dispatch({ type: 'SET_SCREEN', screen: SCREENS.ANALYSIS })} />
-          <div>
-            <div className="text-title">Edit Ticket</div>
-            <div className="text-meta">Review before submitting</div>
+    <div style={{
+      display: 'flex', flexDirection: 'column',
+      flex: 1, height: '100vh', overflow: 'hidden',
+      background: '#fff',
+    }}
+      className="anim-slide-in-right"
+    >
+      {/* Header */}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 8,
+        padding: '13px 16px 12px',
+        background: '#fff', borderBottom: '1px solid #E4E9F0', flexShrink: 0,
+      }}>
+        <button type="button"
+          onClick={() => dispatch({ type: 'SET_SCREEN', screen: SCREENS.ANALYSIS })}
+          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px 6px 4px 0', display: 'flex', color: '#8A97A8' }}
+          onMouseEnter={(e) => (e.currentTarget.style.color = NAVY)}
+          onMouseLeave={(e) => (e.currentTarget.style.color = '#8A97A8')}
+        >
+          <ArrowLeft size={16} strokeWidth={2.5} />
+        </button>
+        <div>
+          <div style={{ fontSize: 13, fontWeight: 900, color: NAVY, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+            Edit Ticket
+          </div>
+          <div style={{ fontSize: 10, color: '#8A97A8', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+            Review before submitting
           </div>
         </div>
       </div>
 
-      <div className="screen-body" style={{ paddingTop: 14, paddingBottom: 10, gap: 10 }}>
+      {/* Body */}
+      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '14px 16px 10px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+
         <div className="form-group">
           <label>Title</label>
           <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Ticket title" />
@@ -86,13 +108,13 @@ export function TicketReview({ state, dispatch }) {
           <div className="form-group">
             <label>Type</label>
             <select value={type} onChange={(e) => setType(e.target.value)}>
-              {TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+              {TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
             </select>
           </div>
           <div className="form-group">
             <label>Priority</label>
             <select value={priority} onChange={(e) => setPriority(e.target.value)}>
-              {PRIORITIES.map((p) => <option key={p} value={p}>{p}</option>)}
+              {PRIORITIES.map(p => <option key={p} value={p}>{p}</option>)}
             </select>
           </div>
         </div>
@@ -104,45 +126,76 @@ export function TicketReview({ state, dispatch }) {
         </div>
 
         <div className="form-group">
-          <label>Labels <span style={{ color: '#bbb', fontWeight: 400 }}>(comma separated)</span></label>
+          <label>Labels <span style={{ color: '#A8B4C0', fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>(comma separated)</span></label>
           <input value={labels} onChange={(e) => setLabels(e.target.value)}
             placeholder="callscribe, customer-feedback" />
         </div>
 
-        {jira.error && <div className="banner error">{jira.error}</div>}
-        {pb.error   && <div className="banner error">{pb.error}</div>}
+        {jira.error && (
+          <div style={{ background: '#fef2f2', color: '#dc2626', fontSize: 11, padding: '8px 12px', borderRadius: 7, border: '1px solid #fecaca' }}>
+            {jira.error}
+          </div>
+        )}
+        {pb.error && (
+          <div style={{ background: '#fef2f2', color: '#dc2626', fontSize: 11, padding: '8px 12px', borderRadius: 7, border: '1px solid #fecaca' }}>
+            {pb.error}
+          </div>
+        )}
 
         {jira.done && (
-          <a href={jira.url} target="_blank" rel="noopener noreferrer" className="banner success" style={{ textDecoration: 'none' }}>
+          <a href={jira.url} target="_blank" rel="noopener noreferrer"
+            style={{ display: 'flex', alignItems: 'center', gap: 5, background: '#f0fdf4', color: '#16a34a', fontSize: 11, fontWeight: 700, padding: '9px 12px', borderRadius: 7, border: '1px solid #dcfce7', textDecoration: 'none', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
             <ExternalLink size={11} /> JIRA ticket created — view
           </a>
         )}
         {pb.done && (
-          <a href={pb.url} target="_blank" rel="noopener noreferrer" className="banner success" style={{ textDecoration: 'none' }}>
+          <a href={pb.url} target="_blank" rel="noopener noreferrer"
+            style={{ display: 'flex', alignItems: 'center', gap: 5, background: '#f0fdf4', color: '#16a34a', fontSize: 11, fontWeight: 700, padding: '9px 12px', borderRadius: 7, border: '1px solid #dcfce7', textDecoration: 'none', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
             <ExternalLink size={11} /> Productboard insight created — view
           </a>
         )}
       </div>
 
-      <div className="screen-footer" style={{ display: 'flex', gap: 8 }}>
-        <Button
-          loading={jira.loading} disabled={isSubmitting || !title}
-          icon={jira.done ? ExternalLink : Send}
-          variant={jira.done ? 'secondary' : 'primary'}
+      {/* Footer */}
+      <div style={{ padding: '12px 16px 14px', background: '#fff', borderTop: '1px solid #E4E9F0', flexShrink: 0, display: 'flex', gap: 8 }}>
+        <button
+          type="button"
           onClick={handleJira}
-          style={{ flex: 1, minWidth: 0, flexShrink: 1 }}
+          disabled={isSubmitting || !title}
+          style={{
+            flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+            padding: '0 12px', height: 40, borderRadius: 8, border: 'none',
+            background: NAVY, color: '#fff',
+            fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em',
+            cursor: isSubmitting || !title ? 'not-allowed' : 'pointer',
+            opacity: isSubmitting || !title ? 0.5 : 1,
+          }}
         >
-          {jira.done ? 'Re-submit JIRA' : 'JIRA Ticket'}
-        </Button>
-        <Button
-          loading={pb.loading} disabled={isSubmitting || !title}
-          icon={pb.done ? ExternalLink : Send}
-          variant={pb.done ? 'secondary' : 'accent'}
+          {jira.loading
+            ? <span style={{ width: 14, height: 14, border: '2px solid rgba(255,255,255,0.3)', borderTopColor: '#fff', borderRadius: '50%', animation: 'spin 0.7s linear infinite', display: 'inline-block' }} />
+            : jira.done ? <ExternalLink size={12} /> : <Send size={12} />
+          }
+          {jira.done ? 'Re-submit JIRA' : 'JIRA'}
+        </button>
+        <button
+          type="button"
           onClick={handlePB}
-          style={{ flex: 1, minWidth: 0, flexShrink: 1 }}
+          disabled={isSubmitting || !title}
+          style={{
+            flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+            padding: '0 12px', height: 40, borderRadius: 8, border: 'none',
+            background: ORANGE, color: '#fff',
+            fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em',
+            cursor: isSubmitting || !title ? 'not-allowed' : 'pointer',
+            opacity: isSubmitting || !title ? 0.5 : 1,
+          }}
         >
+          {pb.loading
+            ? <span style={{ width: 14, height: 14, border: '2px solid rgba(255,255,255,0.3)', borderTopColor: '#fff', borderRadius: '50%', animation: 'spin 0.7s linear infinite', display: 'inline-block' }} />
+            : pb.done ? <ExternalLink size={12} /> : <Send size={12} />
+          }
           {pb.done ? 'Re-submit PB' : 'Productboard'}
-        </Button>
+        </button>
       </div>
     </div>
   );
