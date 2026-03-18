@@ -117,7 +117,7 @@ export function AppShell({ state, dispatch, children }) {
       icon:    Lightbulb,
       label:   'Product Gaps',
       screen:  SCREENS.ANALYSIS,
-      enabled: hasInsights,
+      enabled: hasTranscript,
     },
     {
       id:      'intelligence',

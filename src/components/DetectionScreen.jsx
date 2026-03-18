@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import { SCREENS } from '../constants';
 import { parseChunks } from '../utils/mindtickleParser';
-import { analyzeTranscript, analyzeCallIntelligence } from '../services/claudeService';
+import { analyzeCallIntelligence } from '../services/claudeService';
 
 const STATUS = { CHECKING: 'checking', FOUND: 'found', NOT_FOUND: 'not_found', ERROR: 'error' };
 const ORANGE = '#E55014';
@@ -171,12 +171,11 @@ export function DetectionScreen({ state, dispatch }) {
     setBusyOp('actionables');
     dispatch({ type: 'CLEAR_ERROR' });
     try {
-      const transcript = await ensureTranscript();
-      const insights = await analyzeTranscript(transcript, state.meetingId, state.settings?.claudeApiKey);
-      dispatch({ type: 'INSIGHTS_LOADED', insights });
+      await ensureTranscript();
       dispatch({ type: 'SET_SCREEN', screen: SCREENS.ANALYSIS });
     } catch (err) {
       dispatch({ type: 'SET_ERROR', error: err.message });
+    } finally {
       setBusyOp(null);
     }
   }

@@ -404,11 +404,13 @@ export function AnalysisScreen({ state, dispatch }) {
             </button>
           );
         })}
-        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', paddingBottom: 1 }}>
-          <span style={{ fontSize: 10, fontWeight: 600, color: '#A8B4C0' }}>
-            {insights.length} item{insights.length !== 1 ? 's' : ''}
-          </span>
-        </div>
+        {insights.length > 0 && (
+          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', paddingBottom: 1 }}>
+            <span style={{ fontSize: 10, fontWeight: 600, color: '#A8B4C0' }}>
+              {insights.length} item{insights.length !== 1 ? 's' : ''}
+            </span>
+          </div>
+        )}
       </div>
 
       {error && (
@@ -426,28 +428,32 @@ export function AnalysisScreen({ state, dispatch }) {
         animation: 'tabEnter 200ms cubic-bezier(0.22,1,0.36,1) both',
       }}>
         {insights.length === 0 && !reanalyzing ? (
-          <div style={{ textAlign: 'center', padding: '40px 16px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 14, padding: '48px 20px', textAlign: 'center' }}>
             <div style={{
-              width: 44, height: 44, borderRadius: 12, background: '#F5F7FA',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px',
+              width: 52, height: 52, borderRadius: 14, background: '#fff',
+              border: '1px solid #E4E9F0',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
             }}>
-              <LayoutList size={20} style={{ color: '#A8B4C0' }} />
+              <LayoutList size={24} style={{ color: '#C8D2DE' }} />
             </div>
-            <div style={{ fontSize: 13, fontWeight: 800, color: NAVY, marginBottom: 5, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-              No Insights Found
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 800, color: NAVY, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                {state.insights?.length === 0 && !state._insightsRan ? 'Ready to Analyze' : 'No Gaps Found'}
+              </div>
+              <div style={{ fontSize: 12, color: '#8A97A8', lineHeight: 1.65, maxWidth: 230, margin: '0 auto 18px' }}>
+                Extract product gaps, bugs, feature requests, and pain points from this call using Claude.
+              </div>
+              <button type="button" onClick={handleReanalyze}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 6, margin: '0 auto',
+                  padding: '0 20px', height: 40, borderRadius: 8, border: 'none',
+                  background: ORANGE, color: '#fff',
+                  cursor: 'pointer', fontSize: 12, fontWeight: 700,
+                  textTransform: 'uppercase', letterSpacing: '0.06em',
+                }}>
+                <Lightbulb size={13} strokeWidth={2.5} /> Analyze with Claude
+              </button>
             </div>
-            <div style={{ fontSize: 11.5, color: '#8A97A8', lineHeight: 1.6, maxWidth: 220, margin: '0 auto 14px' }}>
-              Try re-analyzing or use a call where the customer discusses product issues.
-            </div>
-            <button type="button" onClick={handleReanalyze}
-              style={{
-                padding: '0 16px', height: 36, borderRadius: 7, border: 'none',
-                background: ORANGE, color: '#fff',
-                cursor: 'pointer', fontSize: 11, fontWeight: 700,
-                textTransform: 'uppercase', letterSpacing: '0.06em',
-              }}>
-              Re-analyze
-            </button>
           </div>
         ) : reanalyzing ? (
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '12px 0', color: '#8A97A8', fontSize: 12, fontWeight: 600 }}>
