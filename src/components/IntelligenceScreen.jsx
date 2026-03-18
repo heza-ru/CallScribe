@@ -1,11 +1,12 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
-  ArrowLeft, MoreHorizontal, RefreshCw,
+  ArrowLeft, RefreshCw,
   CheckCircle2, XCircle, ThumbsUp, ThumbsDown,
   Target, TrendingUp, Swords, ShieldAlert,
-  AlertTriangle, CheckCheck,
+  AlertTriangle, CheckCheck, Download,
 } from 'lucide-react';
 import { analyzeTranscript, analyzeCallIntelligence, detectCompetitors, trackObjections } from '../services/claudeService';
+import { downloadIntelligence, downloadCompetitors, downloadObjections } from '../utils/analysisFormatter';
 import { SCREENS } from '../constants';
 
 const ORANGE = '#E55014';
@@ -392,8 +393,17 @@ const SENTIMENT_STYLE = {
 };
 
 function CompetitorsTab({ state, dispatch }) {
-  const [loading, setLoading] = useState(false);
-  const [error,   setError]   = useState(null);
+  const [loading,  setLoading]  = useState(false);
+  const [error,    setError]    = useState(null);
+  const [dlOpen,   setDlOpen]   = useState(false);
+  const dlRef = useRef(null);
+
+  useEffect(() => {
+    if (!dlOpen) return;
+    function onDown(e) { if (dlRef.current && !dlRef.current.contains(e.target)) setDlOpen(false); }
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [dlOpen]);
 
   const data = state.competitors;
   const hasData = data && data !== 'loading' && data.competitors !== undefined;
@@ -498,9 +508,32 @@ function CompetitorsTab({ state, dispatch }) {
             })
           )}
 
-          <button type="button" onClick={handleDetect} style={{ display: 'flex', alignItems: 'center', gap: 5, margin: '4px auto 0', padding: '0 14px', height: 32, borderRadius: 7, border: '1px solid #E4E9F0', background: '#fff', color: '#8A97A8', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', cursor: 'pointer' }}>
-            <RefreshCw size={10} /> Re-run
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 4 }}>
+            <button type="button" onClick={handleDetect} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '0 14px', height: 32, borderRadius: 7, border: '1px solid #E4E9F0', background: '#fff', color: '#8A97A8', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', cursor: 'pointer' }}>
+              <RefreshCw size={10} /> Re-run
+            </button>
+            <div style={{ position: 'relative' }} ref={dlRef}>
+              <button type="button" onClick={() => setDlOpen(v => !v)}
+                style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '0 14px', height: 32, borderRadius: 7, border: '1px solid #E4E9F0', background: '#fff', color: '#8A97A8', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', cursor: 'pointer' }}>
+                <Download size={10} strokeWidth={2} /> Export
+              </button>
+              {dlOpen && (
+                <div style={{ position: 'absolute', bottom: 'calc(100% + 4px)', right: 0, zIndex: 50, background: '#fff', borderRadius: 8, border: '1px solid #E4E9F0', boxShadow: '0 6px 20px rgba(13,23,38,0.10)', overflow: 'hidden', minWidth: 150 }}>
+                  {[{ fmt: 'md', label: 'Markdown', ext: '.md' }, { fmt: 'json', label: 'JSON', ext: '.json' }, { fmt: 'txt', label: 'Plain Text', ext: '.txt' }].map(({ fmt, label, ext }) => (
+                    <button key={fmt} type="button"
+                      onClick={() => { downloadCompetitors(data, state.meetingId, fmt); setDlOpen(false); }}
+                      style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', background: 'none', border: 'none', cursor: 'pointer', borderTop: '1px solid #F5F7FA', fontSize: 11.5, fontFamily: 'var(--font-sans)', fontWeight: 600, color: NAVY, textAlign: 'left', gap: 12 }}
+                      onMouseEnter={(e) => (e.currentTarget.style.background = '#F5F7FA')}
+                      onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
+                    >
+                      <span>{label}</span>
+                      <span style={{ fontSize: 10, color: '#8A97A8', fontWeight: 500 }}>{ext}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
         </>
       )}
     </div>
@@ -516,8 +549,17 @@ const SEVERITY_STYLE = {
 };
 
 function ObjectionsTab({ state, dispatch }) {
-  const [loading, setLoading] = useState(false);
-  const [error,   setError]   = useState(null);
+  const [loading,  setLoading]  = useState(false);
+  const [error,    setError]    = useState(null);
+  const [dlOpen,   setDlOpen]   = useState(false);
+  const dlRef = useRef(null);
+
+  useEffect(() => {
+    if (!dlOpen) return;
+    function onDown(e) { if (dlRef.current && !dlRef.current.contains(e.target)) setDlOpen(false); }
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [dlOpen]);
 
   const data = state.objections;
   const hasData = data && data !== 'loading' && data.objections !== undefined;
@@ -641,9 +683,32 @@ function ObjectionsTab({ state, dispatch }) {
             })
           )}
 
-          <button type="button" onClick={handleDetect} style={{ display: 'flex', alignItems: 'center', gap: 5, margin: '4px auto 0', padding: '0 14px', height: 32, borderRadius: 7, border: '1px solid #E4E9F0', background: '#fff', color: '#8A97A8', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', cursor: 'pointer' }}>
-            <RefreshCw size={10} /> Re-run
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 4 }}>
+            <button type="button" onClick={handleDetect} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '0 14px', height: 32, borderRadius: 7, border: '1px solid #E4E9F0', background: '#fff', color: '#8A97A8', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', cursor: 'pointer' }}>
+              <RefreshCw size={10} /> Re-run
+            </button>
+            <div style={{ position: 'relative' }} ref={dlRef}>
+              <button type="button" onClick={() => setDlOpen(v => !v)}
+                style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '0 14px', height: 32, borderRadius: 7, border: '1px solid #E4E9F0', background: '#fff', color: '#8A97A8', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', cursor: 'pointer' }}>
+                <Download size={10} strokeWidth={2} /> Export
+              </button>
+              {dlOpen && (
+                <div style={{ position: 'absolute', bottom: 'calc(100% + 4px)', right: 0, zIndex: 50, background: '#fff', borderRadius: 8, border: '1px solid #E4E9F0', boxShadow: '0 6px 20px rgba(13,23,38,0.10)', overflow: 'hidden', minWidth: 150 }}>
+                  {[{ fmt: 'md', label: 'Markdown', ext: '.md' }, { fmt: 'json', label: 'JSON', ext: '.json' }, { fmt: 'csv', label: 'CSV', ext: '.csv' }, { fmt: 'txt', label: 'Plain Text', ext: '.txt' }].map(({ fmt, label, ext }) => (
+                    <button key={fmt} type="button"
+                      onClick={() => { downloadObjections(data, state.meetingId, fmt); setDlOpen(false); }}
+                      style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', background: 'none', border: 'none', cursor: 'pointer', borderTop: '1px solid #F5F7FA', fontSize: 11.5, fontFamily: 'var(--font-sans)', fontWeight: 600, color: NAVY, textAlign: 'left', gap: 12 }}
+                      onMouseEnter={(e) => (e.currentTarget.style.background = '#F5F7FA')}
+                      onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
+                    >
+                      <span>{label}</span>
+                      <span style={{ fontSize: 10, color: '#8A97A8', fontWeight: 500 }}>{ext}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
         </>
       )}
     </div>
@@ -664,6 +729,15 @@ export function IntelligenceScreen({ state, dispatch }) {
   const [tab,         setTab]         = useState('insights');
   const [reanalyzing, setReanalyzing] = useState(false);
   const [error,       setError]       = useState(null);
+  const [dlOpen,      setDlOpen]      = useState(false);
+  const dlRef = useRef(null);
+
+  useEffect(() => {
+    if (!dlOpen) return;
+    function onDown(e) { if (dlRef.current && !dlRef.current.contains(e.target)) setDlOpen(false); }
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [dlOpen]);
 
   async function handleReanalyze() {
     setError(null);
@@ -784,10 +858,34 @@ export function IntelligenceScreen({ state, dispatch }) {
             <RefreshCw size={14} strokeWidth={2}
               style={{ animation: reanalyzing ? 'spin 1s linear infinite' : 'none' }} />
           </button>
-          <button type="button"
-            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 6, borderRadius: 6, display: 'flex', color: '#8A97A8' }}>
-            <MoreHorizontal size={15} strokeWidth={2} />
-          </button>
+          <div style={{ position: 'relative' }} ref={dlRef}>
+            <button type="button"
+              onClick={() => setDlOpen(v => !v)}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 6, borderRadius: 6, display: 'flex', color: '#8A97A8' }}
+              onMouseEnter={(e) => (e.currentTarget.style.color = ORANGE)}
+              onMouseLeave={(e) => (e.currentTarget.style.color = '#8A97A8')}
+            >
+              <Download size={15} strokeWidth={2} />
+            </button>
+            {dlOpen && (
+              <div style={{ position: 'absolute', top: 'calc(100% + 6px)', right: 0, zIndex: 50, background: '#fff', borderRadius: 10, border: '1px solid #E4E9F0', boxShadow: '0 8px 24px rgba(13,23,38,0.10)', overflow: 'hidden', minWidth: 175 }}>
+                <div style={{ padding: '8px 12px 6px', fontSize: 9.5, fontWeight: 700, color: '#A8B4C0', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                  Export Report
+                </div>
+                {[{ fmt: 'md', label: 'Markdown', ext: '.md' }, { fmt: 'json', label: 'JSON', ext: '.json' }, { fmt: 'txt', label: 'Plain Text', ext: '.txt' }].map(({ fmt, label, ext }) => (
+                  <button key={fmt} type="button"
+                    onClick={() => { downloadIntelligence(ci, state.meetingId, fmt); setDlOpen(false); }}
+                    style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '9px 14px', background: 'none', border: 'none', cursor: 'pointer', borderTop: '1px solid #F5F7FA', fontSize: 12, fontFamily: 'var(--font-sans)', fontWeight: 600, color: NAVY, textAlign: 'left', gap: 16 }}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = '#F5F7FA')}
+                    onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
+                  >
+                    <span>{label}</span>
+                    <span style={{ fontSize: 10, color: '#8A97A8', fontWeight: 500 }}>{ext}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 

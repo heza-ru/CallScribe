@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { ClipboardList, RefreshCw, Copy, Check, FileText, Users } from 'lucide-react';
+import { ClipboardList, RefreshCw, Copy, Check, FileText, Users, Download, ChevronDown } from 'lucide-react';
 import { generateMOM } from '../services/claudeService';
+import { downloadMOM } from '../utils/analysisFormatter';
 
 const ORANGE = '#E55014';
 const NAVY   = '#0D1726';
@@ -83,11 +84,38 @@ const mdComponents = {
   hr: () => <div style={{ height: 1, background: '#E4E9F0', margin: '14px 0' }} />,
 };
 
+const MOM_EXPORT_FORMATS = [
+  { version: 'internal', fmt: 'md',  label: 'Internal',  ext: '.md'  },
+  { version: 'external', fmt: 'md',  label: 'External',  ext: '.md'  },
+  { version: 'both',     fmt: 'md',  label: 'Both',       ext: '.md'  },
+  null,
+  { version: 'internal', fmt: 'txt', label: 'Internal',  ext: '.txt' },
+  { version: 'external', fmt: 'txt', label: 'External',  ext: '.txt' },
+  { version: 'both',     fmt: 'txt', label: 'Both',       ext: '.txt' },
+];
+
 export function MOMScreen({ state, dispatch }) {
-  const [tab,      setTab]      = useState('internal');
-  const [loading,  setLoading]  = useState(false);
-  const [error,    setError]    = useState(null);
-  const [copied,   setCopied]   = useState(false);
+  const [tab,        setTab]        = useState('internal');
+  const [loading,    setLoading]    = useState(false);
+  const [error,      setError]      = useState(null);
+  const [copied,     setCopied]     = useState(false);
+  const [dlOpen,     setDlOpen]     = useState(false);
+  const [downloaded, setDownloaded] = useState(false);
+  const dlRef = useRef(null);
+
+  useEffect(() => {
+    if (!dlOpen) return;
+    function onDown(e) { if (dlRef.current && !dlRef.current.contains(e.target)) setDlOpen(false); }
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [dlOpen]);
+
+  function handleDownload(version, fmt) {
+    downloadMOM(mom, state.meetingId, version, fmt);
+    setDlOpen(false);
+    setDownloaded(true);
+    setTimeout(() => setDownloaded(false), 2000);
+  }
 
   const mom = state.mom;
   const hasContent = mom && mom !== 'loading' && (mom.internal || mom.external);
@@ -136,20 +164,65 @@ export function MOMScreen({ state, dispatch }) {
         </div>
         <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
           {hasContent && (
-            <button type="button" onClick={handleCopy}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 5,
-                padding: '5px 10px', borderRadius: 7,
-                background: copied ? '#f0fdf4' : '#F5F7FA',
-                border: `1px solid ${copied ? '#dcfce7' : '#E4E9F0'}`,
-                cursor: 'pointer', fontSize: 11, fontWeight: 700,
-                color: copied ? '#16a34a' : NAVY,
-                textTransform: 'uppercase', letterSpacing: '0.06em',
-                transition: 'all 150ms',
-              }}>
-              {copied ? <Check size={11} strokeWidth={2.5} /> : <Copy size={11} strokeWidth={2} />}
-              {copied ? 'Copied' : 'Copy'}
-            </button>
+            <>
+              <button type="button" onClick={handleCopy}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 5,
+                  padding: '5px 10px', borderRadius: 7,
+                  background: copied ? '#f0fdf4' : '#F5F7FA',
+                  border: `1px solid ${copied ? '#dcfce7' : '#E4E9F0'}`,
+                  cursor: 'pointer', fontSize: 11, fontWeight: 700,
+                  color: copied ? '#16a34a' : NAVY,
+                  textTransform: 'uppercase', letterSpacing: '0.06em',
+                  transition: 'all 150ms',
+                }}>
+                {copied ? <Check size={11} strokeWidth={2.5} /> : <Copy size={11} strokeWidth={2} />}
+                {copied ? 'Copied' : 'Copy'}
+              </button>
+
+              {/* Download dropdown */}
+              <div style={{ position: 'relative' }} ref={dlRef}>
+                <button type="button" onClick={() => setDlOpen(v => !v)}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 5,
+                    padding: '5px 10px', height: 30, borderRadius: 7,
+                    background: downloaded ? '#f0fdf4' : '#F5F7FA',
+                    border: `1px solid ${downloaded ? '#dcfce7' : '#E4E9F0'}`,
+                    cursor: 'pointer', fontSize: 11, fontWeight: 700,
+                    color: downloaded ? '#16a34a' : NAVY,
+                    textTransform: 'uppercase', letterSpacing: '0.06em',
+                    transition: 'all 130ms',
+                  }}
+                  onMouseEnter={(e) => { if (!downloaded) { e.currentTarget.style.background = '#ECF0F5'; e.currentTarget.style.borderColor = '#C8D2DE'; } }}
+                  onMouseLeave={(e) => { if (!downloaded) { e.currentTarget.style.background = '#F5F7FA'; e.currentTarget.style.borderColor = '#E4E9F0'; } }}
+                >
+                  {downloaded
+                    ? <><Check size={11} strokeWidth={2.5} /> Saved</>
+                    : <><Download size={11} strokeWidth={2} /> Export <ChevronDown size={10} style={{ color: '#A8B4C0', transform: dlOpen ? 'rotate(180deg)' : 'none', transition: 'transform 180ms' }} /></>
+                  }
+                </button>
+                {dlOpen && (
+                  <div style={{ position: 'absolute', top: 'calc(100% + 6px)', right: 0, zIndex: 50, background: '#fff', borderRadius: 10, border: '1px solid #E4E9F0', boxShadow: '0 8px 24px rgba(13,23,38,0.10)', overflow: 'hidden', minWidth: 190 }}>
+                    <div style={{ padding: '8px 12px 6px', fontSize: 9.5, fontWeight: 700, color: '#A8B4C0', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                      Export Minutes
+                    </div>
+                    {MOM_EXPORT_FORMATS.map((f, i) => f === null ? (
+                      <div key={i} style={{ height: 1, background: '#F5F7FA', margin: '2px 0' }} />
+                    ) : (
+                      <button key={`${f.version}-${f.fmt}`} type="button"
+                        onClick={() => handleDownload(f.version, f.fmt)}
+                        style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '9px 14px', background: 'none', border: 'none', cursor: 'pointer', borderTop: '1px solid #F5F7FA', fontSize: 12, fontFamily: 'var(--font-sans)', fontWeight: 600, color: NAVY, textAlign: 'left', gap: 16 }}
+                        onMouseEnter={(e) => (e.currentTarget.style.background = '#F5F7FA')}
+                        onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
+                      >
+                        <span>{f.label}</span>
+                        <span style={{ fontSize: 10, color: '#8A97A8', fontWeight: 500 }}>{f.ext}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </>
           )}
           <button type="button" onClick={handleGenerate} disabled={!state.transcript || isLoading}
             style={{

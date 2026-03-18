@@ -1,12 +1,13 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import {
   Bug, Zap, MessageSquare, Lightbulb, ListTodo,
   ExternalLink, Pencil, X, RefreshCw, LayoutList,
-  BarChart2, ArrowRight, AlertTriangle,
+  BarChart2, ArrowRight, AlertTriangle, Download, ChevronDown, Check,
 } from 'lucide-react';
 import { analyzeTranscript, analyzeCallIntelligence } from '../services/claudeService';
 import { createJiraTicket } from '../services/jiraService';
 import { createProductboardInsight } from '../services/productboardService';
+import { downloadAllInsights, downloadSingleInsight } from '../utils/analysisFormatter';
 import { SCREENS } from '../constants';
 
 const ORANGE = '#E55014';
@@ -37,10 +38,27 @@ const TABS = [
   { key: 'type',     label: 'Type' },
 ];
 
+const CARD_DOWNLOAD_FORMATS = [
+  { fmt: 'md',   label: 'Markdown', ext: '.md'   },
+  { fmt: 'json', label: 'JSON',     ext: '.json'  },
+  { fmt: 'txt',  label: 'Plain Text', ext: '.txt' },
+];
+
 function InsightCard({ insight, meetingId, settings, onEdit, onDismiss, delay = 0 }) {
-  const [jira, setJira] = useState({ loading: false, done: false, url: null, error: null });
-  const [pb,   setPb]   = useState({ loading: false, done: false, url: null, error: null });
-  const [open, setOpen] = useState(false);
+  const [jira,         setJira]         = useState({ loading: false, done: false, url: null, error: null });
+  const [pb,           setPb]           = useState({ loading: false, done: false, url: null, error: null });
+  const [open,         setOpen]         = useState(false);
+  const [dlOpen,       setDlOpen]       = useState(false);
+  const dlRef = useRef(null);
+
+  useEffect(() => {
+    if (!dlOpen) return;
+    function onDown(e) {
+      if (dlRef.current && !dlRef.current.contains(e.target)) setDlOpen(false);
+    }
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [dlOpen]);
 
   const meta   = TYPE_META[insight.type] || TYPE_META.improvement;
   const TypeIcon = meta.icon;
@@ -112,13 +130,50 @@ function InsightCard({ insight, meetingId, settings, onEdit, onDismiss, delay = 
               {meta.label}
             </span>
           </div>
-          <div style={{ display: 'flex', gap: 1, flexShrink: 0 }}>
+          <div style={{ display: 'flex', gap: 1, flexShrink: 0, alignItems: 'center' }}>
             <button type="button" title="Edit"
               onClick={() => onEdit(insight)}
               style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '3px 4px', borderRadius: 5, color: '#C8D2DE', display: 'flex', transition: 'color 120ms' }}
               onMouseEnter={(e) => (e.currentTarget.style.color = '#4B5A6D')}
               onMouseLeave={(e) => (e.currentTarget.style.color = '#C8D2DE')}
             ><Pencil size={11} /></button>
+
+            {/* Per-card download */}
+            <div style={{ position: 'relative' }} ref={dlRef}>
+              <button type="button" title="Download"
+                onClick={() => setDlOpen(v => !v)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '3px 4px', borderRadius: 5, color: '#C8D2DE', display: 'flex', transition: 'color 120ms' }}
+                onMouseEnter={(e) => (e.currentTarget.style.color = ORANGE)}
+                onMouseLeave={(e) => { if (!dlOpen) e.currentTarget.style.color = '#C8D2DE'; }}
+              ><Download size={11} /></button>
+              {dlOpen && (
+                <div style={{
+                  position: 'absolute', top: 'calc(100% + 4px)', right: 0, zIndex: 50,
+                  background: '#fff', borderRadius: 8, border: '1px solid #E4E9F0',
+                  boxShadow: '0 6px 20px rgba(13,23,38,0.10)', overflow: 'hidden', minWidth: 130,
+                }}>
+                  {CARD_DOWNLOAD_FORMATS.map(({ fmt, label, ext }) => (
+                    <button key={fmt} type="button"
+                      onClick={() => { downloadSingleInsight(insight, meetingId, fmt); setDlOpen(false); }}
+                      style={{
+                        width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                        padding: '8px 12px', background: 'none', border: 'none', cursor: 'pointer',
+                        fontSize: 11.5, fontWeight: 600, color: NAVY, textAlign: 'left',
+                        borderBottom: fmt !== 'txt' ? '1px solid #F5F7FA' : 'none',
+                        gap: 12,
+                        fontFamily: 'var(--font-sans)',
+                      }}
+                      onMouseEnter={(e) => (e.currentTarget.style.background = '#F5F7FA')}
+                      onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
+                    >
+                      <span>{label}</span>
+                      <span style={{ fontSize: 10, color: '#A8B4C0', fontWeight: 500 }}>{ext}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
             <button type="button" title="Dismiss"
               onClick={() => onDismiss(insight.id)}
               style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '3px 4px', borderRadius: 5, color: '#C8D2DE', display: 'flex', transition: 'color 120ms' }}
@@ -245,11 +300,37 @@ function GroupHeader({ label, color, count }) {
   );
 }
 
+const EXPORT_FORMATS = [
+  { fmt: 'md',   label: 'Markdown',   ext: '.md'   },
+  { fmt: 'json', label: 'JSON',       ext: '.json'  },
+  { fmt: 'csv',  label: 'CSV',        ext: '.csv'   },
+  { fmt: 'txt',  label: 'Plain Text', ext: '.txt'   },
+];
+
 export function AnalysisScreen({ state, dispatch }) {
   const [activeTab,   setTab]        = useState('all');
   const [reanalyzing, setReanalyzing] = useState(false);
   const [error,       setError]       = useState(null);
   const [dismissed,   setDismissed]   = useState(new Set());
+  const [exportOpen,  setExportOpen]  = useState(false);
+  const [downloaded,  setDownloaded]  = useState(false);
+  const exportRef = useRef(null);
+
+  useEffect(() => {
+    if (!exportOpen) return;
+    function onDown(e) {
+      if (exportRef.current && !exportRef.current.contains(e.target)) setExportOpen(false);
+    }
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [exportOpen]);
+
+  function handleExport(fmt) {
+    downloadAllInsights(insights, state.meetingId, fmt);
+    setExportOpen(false);
+    setDownloaded(true);
+    setTimeout(() => setDownloaded(false), 2000);
+  }
 
   const insights = (state.insights || []).filter(i => !dismissed.has(i.id));
 
@@ -365,6 +446,60 @@ export function AnalysisScreen({ state, dispatch }) {
               Insights
             </button>
           )}
+
+          {/* Collective export */}
+          {insights.length > 0 && (
+            <div style={{ position: 'relative' }} ref={exportRef}>
+              <button type="button"
+                onClick={() => setExportOpen(v => !v)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 5,
+                  padding: '5px 10px', height: 30, borderRadius: 7,
+                  background: downloaded ? '#f0fdf4' : '#F5F7FA',
+                  border: `1px solid ${downloaded ? '#dcfce7' : '#E4E9F0'}`,
+                  cursor: 'pointer', fontSize: 11, fontWeight: 700,
+                  color: downloaded ? '#16a34a' : NAVY,
+                  textTransform: 'uppercase', letterSpacing: '0.06em',
+                  transition: 'all 130ms',
+                }}
+                onMouseEnter={(e) => { if (!downloaded) { e.currentTarget.style.background = '#ECF0F5'; e.currentTarget.style.borderColor = '#C8D2DE'; } }}
+                onMouseLeave={(e) => { if (!downloaded) { e.currentTarget.style.background = '#F5F7FA'; e.currentTarget.style.borderColor = '#E4E9F0'; } }}
+              >
+                {downloaded
+                  ? <><Check size={11} strokeWidth={2.5} /> Saved</>
+                  : <><Download size={11} strokeWidth={2} /> Export <ChevronDown size={10} style={{ color: '#A8B4C0', transform: exportOpen ? 'rotate(180deg)' : 'none', transition: 'transform 180ms' }} /></>
+                }
+              </button>
+              {exportOpen && (
+                <div style={{
+                  position: 'absolute', top: 'calc(100% + 6px)', right: 0, zIndex: 50,
+                  background: '#fff', borderRadius: 10, border: '1px solid #E4E9F0',
+                  boxShadow: '0 8px 24px rgba(13,23,38,0.10)', overflow: 'hidden', minWidth: 175,
+                }}>
+                  <div style={{ padding: '8px 12px 6px', fontSize: 9.5, fontWeight: 700, color: '#A8B4C0', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                    Export {insights.length} insight{insights.length !== 1 ? 's' : ''}
+                  </div>
+                  {EXPORT_FORMATS.map(({ fmt, label, ext }) => (
+                    <button key={fmt} type="button" onClick={() => handleExport(fmt)}
+                      style={{
+                        width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                        padding: '9px 14px', background: 'none', border: 'none', cursor: 'pointer',
+                        borderTop: '1px solid #F5F7FA',
+                        fontSize: 12, fontFamily: 'var(--font-sans)', fontWeight: 600,
+                        color: NAVY, textAlign: 'left', gap: 16,
+                      }}
+                      onMouseEnter={(e) => (e.currentTarget.style.background = '#F5F7FA')}
+                      onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
+                    >
+                      <span>{label}</span>
+                      <span style={{ fontSize: 10, color: '#8A97A8', fontWeight: 500 }}>{ext}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           <button type="button"
             onClick={handleReanalyze}
             title="Re-analyze"
