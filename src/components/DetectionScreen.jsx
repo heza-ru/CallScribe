@@ -3,6 +3,7 @@ import {
   AlertTriangle, CheckCircle2, Loader2,
   ArrowRight, RefreshCw, Settings,
   Info, RotateCcw, FileText, ListChecks, BarChart2,
+  ClipboardList, MessageCircle, Target,
 } from 'lucide-react';
 import { SCREENS } from '../constants';
 import { parseChunks } from '../utils/mindtickleParser';
@@ -180,6 +181,48 @@ export function DetectionScreen({ state, dispatch }) {
     }
   }
 
+  // Meeting Minutes screen
+  async function handleMOM() {
+    setBusyOp('mom');
+    dispatch({ type: 'CLEAR_ERROR' });
+    try {
+      await ensureTranscript();
+      dispatch({ type: 'SET_SCREEN', screen: SCREENS.MOM });
+    } catch (err) {
+      dispatch({ type: 'SET_ERROR', error: err.message });
+    } finally {
+      setBusyOp(null);
+    }
+  }
+
+  // Demo Scope Advisor
+  async function handleDemoScope() {
+    setBusyOp('demo_scope');
+    dispatch({ type: 'CLEAR_ERROR' });
+    try {
+      await ensureTranscript();
+      dispatch({ type: 'SET_SCREEN', screen: SCREENS.DEMO_SCOPE });
+    } catch (err) {
+      dispatch({ type: 'SET_ERROR', error: err.message });
+    } finally {
+      setBusyOp(null);
+    }
+  }
+
+  // Chat with Call screen
+  async function handleChat() {
+    setBusyOp('chat');
+    dispatch({ type: 'CLEAR_ERROR' });
+    try {
+      await ensureTranscript();
+      dispatch({ type: 'SET_SCREEN', screen: SCREENS.CHAT });
+    } catch (err) {
+      dispatch({ type: 'SET_ERROR', error: err.message });
+    } finally {
+      setBusyOp(null);
+    }
+  }
+
   const isBusy        = busyOp !== null;
   const transcriptLoaded = !!state.transcript;
 
@@ -332,6 +375,27 @@ export function DetectionScreen({ state, dispatch }) {
                 disabled={isBusy}
                 loading={busyOp === 'actionables'}
                 onClick={handleActionables}
+              />
+              <QuickActionRow
+                icon={ClipboardList}
+                title="Meeting Minutes"
+                disabled={isBusy}
+                loading={busyOp === 'mom'}
+                onClick={handleMOM}
+              />
+              <QuickActionRow
+                icon={MessageCircle}
+                title="Chat with Call"
+                disabled={isBusy}
+                loading={busyOp === 'chat'}
+                onClick={handleChat}
+              />
+              <QuickActionRow
+                icon={Target}
+                title="Demo Scope Advisor"
+                disabled={isBusy}
+                loading={busyOp === 'demo_scope'}
+                onClick={handleDemoScope}
               />
             </div>
 

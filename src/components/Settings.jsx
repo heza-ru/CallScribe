@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Eye, EyeOff, CheckCircle2, Lock, ExternalLink, Check, X } from 'lucide-react';
+import { Eye, EyeOff, CheckCircle2, Lock, ExternalLink, Check, X, BarChart2, Trash2 } from 'lucide-react';
 import { SCREENS } from '../constants';
+import { getTokenUsage, clearTokenUsage, computeStats } from '../utils/tokenTracker';
 
 const ORANGE = '#E55014';
 const NAVY   = '#0D1726';
@@ -130,8 +131,22 @@ export function Settings({ state, dispatch }) {
   const [jiraEnabled,        setJiraEnabled]        = useState(false);
   const [pbEnabled,          setPbEnabled]          = useState(false);
   const [saved, setSaved] = useState(false);
+  const [tokenStats, setTokenStats] = useState(null);
+  const [clearingUsage, setClearingUsage] = useState(false);
+
+  function loadTokenStats() {
+    getTokenUsage().then(data => setTokenStats(computeStats(data.sessions)));
+  }
+
+  async function handleClearUsage() {
+    setClearingUsage(true);
+    await clearTokenUsage();
+    setTokenStats(computeStats([]));
+    setClearingUsage(false);
+  }
 
   useEffect(() => {
+    loadTokenStats();
     chrome.storage.sync.get(
       ['claudeApiKey', 'jiraBaseUrl', 'jiraEmail', 'jiraApiToken', 'jiraProjectKey', 'productboardApiKey'],
       (r) => {
@@ -293,6 +308,66 @@ export function Settings({ state, dispatch }) {
             enabled={pbEnabled}
             onToggle={() => setPbEnabled(v => !v)}
           />
+        </div>
+
+        {/* API Usage Tracker */}
+        <SectionHeader label="API Usage" sub="Token Consumption" />
+        <div style={{ background: '#fff', border: '1px solid #E4E9F0', borderRadius: 10, overflow: 'hidden' }}>
+          {/* Summary row */}
+          <div style={{ display: 'flex', alignItems: 'center', padding: '10px 14px', borderBottom: '1px solid #F5F7FA', gap: 10 }}>
+            <BarChart2 size={13} style={{ color: ORANGE, flexShrink: 0 }} strokeWidth={2} />
+            <div style={{ flex: 1 }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: NAVY }}>
+                {tokenStats
+                  ? `${tokenStats.totalCalls} call${tokenStats.totalCalls !== 1 ? 's' : ''} · $${tokenStats.estimatedCost.toFixed(4)} est.`
+                  : 'Loading…'}
+              </span>
+              {tokenStats && (
+                <span style={{ fontSize: 10, color: '#8A97A8', marginLeft: 6 }}>
+                  {(tokenStats.totalInput / 1000).toFixed(0)}K in · {(tokenStats.totalOutput / 1000).toFixed(0)}K out
+                </span>
+              )}
+            </div>
+            <button type="button" onClick={handleClearUsage} disabled={clearingUsage || !tokenStats?.totalCalls}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 4,
+                padding: '4px 8px', borderRadius: 6, border: '1px solid #E4E9F0',
+                background: '#F5F7FA', cursor: tokenStats?.totalCalls ? 'pointer' : 'default',
+                fontSize: 10, fontWeight: 700, color: '#8A97A8',
+                textTransform: 'uppercase', letterSpacing: '0.06em',
+                opacity: tokenStats?.totalCalls ? 1 : 0.4,
+                transition: 'all 130ms',
+              }}
+              onMouseEnter={(e) => { if (tokenStats?.totalCalls) { e.currentTarget.style.color = '#dc2626'; e.currentTarget.style.borderColor = '#fecaca'; } }}
+              onMouseLeave={(e) => { if (tokenStats?.totalCalls) { e.currentTarget.style.color = '#8A97A8'; e.currentTarget.style.borderColor = '#E4E9F0'; } }}
+            >
+              <Trash2 size={9} strokeWidth={2} /> Clear
+            </button>
+          </div>
+          {/* Per-operation breakdown */}
+          {tokenStats && Object.keys(tokenStats.byOp).length > 0 ? (
+            Object.entries(tokenStats.byOp).map(([op, s], i, arr) => (
+              <div key={op} style={{
+                display: 'flex', alignItems: 'center',
+                padding: '8px 14px',
+                borderBottom: i < arr.length - 1 ? '1px solid #F5F7FA' : 'none',
+              }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: NAVY }}>{s.label}</div>
+                  <div style={{ fontSize: 10, color: '#8A97A8', marginTop: 1 }}>
+                    {s.calls} call{s.calls !== 1 ? 's' : ''} · {(s.input / 1000).toFixed(1)}K in · {(s.output / 1000).toFixed(1)}K out
+                  </div>
+                </div>
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#4B5A6D' }}>
+                  ${((s.input / 1_000_000 * 0.80) + (s.output / 1_000_000 * 4.00)).toFixed(4)}
+                </div>
+              </div>
+            ))
+          ) : (
+            <div style={{ padding: '14px', textAlign: 'center', fontSize: 11, color: '#A8B4C0' }}>
+              No API calls recorded yet
+            </div>
+          )}
         </div>
 
         {/* Security note */}

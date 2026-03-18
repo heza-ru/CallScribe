@@ -5,29 +5,39 @@
 const WHATFIX_CONTEXT = `
 ## ABOUT WHATFIX
 
-Whatfix is an AI-native Digital Adoption Platform (DAP) sold to mid-market and enterprise customers.
-Its core value proposition: overlay contextual, in-app guidance on any enterprise software to accelerate
-adoption, reduce support load, and enable change management at scale.
+Whatfix is an AI-powered Digital Adoption Platform (DAP) sold to mid-market and enterprise customers.
+Core value proposition: overlay contextual, in-app guidance on web, desktop, mobile, and VDI/OS environments
+to accelerate software adoption, reduce support load, and enable change management at scale.
+Built on no-code tools, contextual AI, and deep integrations — reducing support tickets and time-to-proficiency.
 
-### Products
-1. **Digital Adoption Platform (DAP)** – In-app guidance layered on web, desktop, mobile, or VDI apps
-2. **Product Analytics** – No-code event tracking, funnels, user paths, and feature adoption reports
-3. **Mirror** – AI-powered training sandbox with real-application simulations and AI Roleplay (GenAI conversation practice)
+### Platform Support
+| Platform  | Key Capabilities |
+|-----------|-----------------|
+| **Web**   | In-app Flows, pop-ups, self-help widgets, AI task guidance, analytics for SaaS/enterprise apps; supports SPAs and iframes |
+| **Desktop** | Native overlays for Windows/macOS apps (e.g. Microsoft 365, Teams); automation, accessibility flows, VDI/Citrix compatibility |
+| **Mobile** | iOS/Android SDKs for native/hybrid apps; step-by-step walkthroughs, rich media, cross-app workflows, offline support |
+| **OS/VDI** | Unified guidance on operating systems, virtual desktops (Citrix/VMware), and legacy apps without code changes |
+
+### Core Products
+1. **Digital Adoption Platform (DAP)** – Interactive walkthroughs, tooltips, videos, AI-populated content libraries; omni-channel search
+2. **Product Analytics** – Tracks user interactions, drop-offs, trends; AI Insights Agent surfaces actionable recommendations
+3. **Mirror** – Sandbox simulator for risk-free training; mirrors live apps with AI Roleplay for realistic scenarios, prompt-based creation, multi-language eval
+4. **AI Agents** – Authoring (auto-generates content), Guidance (proactive help), Insights (predictive analytics); powered by ScreenSense for context-aware delivery
 
 ### Core DAP Content Types (critical for correct productArea labelling)
-| Feature         | What it does |
-|----------------|--------------|
-| **Flows**       | Step-by-step interactive walkthroughs that guide users through a task in real-time |
-| **Smart Tips**  | Contextual tooltips pinned to specific UI elements; used for field help, warnings, and error prevention |
-| **Beacons**     | Animated attention markers that highlight buttons, links, or new features |
-| **Pop-ups**     | Modal overlays for guided tours, onboarding, announcements, and promotions |
-| **Task Lists**  | Personalized checklists of Flows for structured onboarding programs |
+| Feature              | What it does |
+|----------------------|--------------|
+| **Flows**            | Step-by-step interactive walkthroughs that guide users through a task in real-time |
+| **Smart Tips**       | Contextual tooltips pinned to specific UI elements; field help, warnings, error prevention |
+| **Beacons**          | Animated attention markers that highlight buttons, links, or new features |
+| **Pop-ups**          | Modal overlays for guided tours, onboarding, announcements, and promotions |
+| **Task Lists**       | Personalized checklists of Flows for structured onboarding programs |
 | **Self Help Widget** | In-app searchable knowledge base; users get help without leaving the app |
-| **Surveys**     | In-app NPS, CSAT, and custom feedback forms |
+| **Surveys**          | In-app NPS, CSAT, and custom feedback forms |
 
 ### Analytics & Reporting
-- **Guidance Analytics**: Completion rates, engagement, and drop-off data per Flow/Beacon/Pop-up/Smart Tip/Survey/Task List/Self Help
-- **Product Analytics**: No-code event tracking, funnel analysis, user journey maps, heatmaps, feature adoption cohorts, scheduled report exports
+- **Guidance Analytics**: Completion rates, engagement, drop-off data per Flow/Beacon/Pop-up/Smart Tip/Survey/Task List/Self Help
+- **Product Analytics**: No-code event tracking, funnel analysis, user journey maps, heatmaps, feature adoption cohorts, scheduled exports
 
 ### Platform Capabilities
 - **Segments**: Target guidance by user role, attributes, behavioral triggers, or custom data
@@ -37,7 +47,7 @@ adoption, reduce support load, and enable change management at scale.
 - **Multi-app Workflows**: Cross-application Flow guidance spanning multiple enterprise systems in a single journey
 - **Multi-format Export**: Export Whatfix content as videos, PDFs, slide decks, and help articles
 - **AI Agents / ScreenSense**: Proactively surfaces next-best-action guidance based on user role, behavior, and real-time screen state
-- **Deployment Environments**: Web, Electron desktop, iOS/Android mobile, Citrix/VDI
+- **Generative AI**: Rapid content scaling, multi-modal support (text/video/audio), enterprise SSO, GDPR compliance, 99.9% uptime
 
 ### Typical Customer Pain Points (context for priority and type classification)
 - Flows not triggering on SPAs or dynamically rendered pages (bug / high priority)
@@ -53,7 +63,9 @@ adoption, reduce support load, and enable change management at scale.
 - Product Analytics not tracking events in iframes or shadow DOM (bug / improvement)
 - Integration Hub missing a key connector (feature)
 - No bulk export / import of content (feature)
-- Onboarding Task Lists not adapting when a user completes steps out of order (improvement)`;
+- Onboarding Task Lists not adapting when a user completes steps out of order (improvement)
+- AI Roleplay in Mirror not supporting client's industry scenario out of the box (feature)
+- Mobile SDK not supporting cross-app workflow on hybrid apps (bug / improvement)`;
 
 export const SYSTEM_PROMPT = `You are a product operations assistant embedded at Whatfix.
 Your job is to analyze sales and customer success call transcripts and extract actionable product insights
@@ -247,5 +259,231 @@ export function buildIntelligenceRequestBody(transcript, meetingId) {
         content: buildIntelligenceUserMessage(transcript, meetingId),
       },
     ],
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Competitor Detection
+// ─────────────────────────────────────────────────────────────────
+
+const COMPETITOR_SYSTEM_PROMPT = `You are a competitive intelligence analyst. Extract every competitor or alternative solution mentioned in this sales call transcript.
+
+Return ONLY valid JSON, no markdown fences:
+{
+  "competitors": [
+    {
+      "name": "Competitor / product name",
+      "category": "Direct competitor | Alternative approach | Internal tool | Other",
+      "mentions": 3,
+      "sentiment": "positive" | "negative" | "neutral",
+      "quotes": ["Verbatim or near-verbatim quote from the transcript mentioning this competitor"],
+      "context": "One sentence: why was this competitor mentioned and what is the customer's relationship with them?"
+    }
+  ],
+  "summary": "One sentence overall competitive landscape summary for this call."
+}
+
+Rules:
+- Include any company name, product, tool, or approach the customer uses or is considering as an alternative
+- "quotes" array: 1-3 short verbatim excerpts (max 120 chars each)
+- If no competitors are mentioned, return { "competitors": [], "summary": "No competitors mentioned in this call." }
+- Do not invent competitors — only extract what is explicitly mentioned`;
+
+export function buildCompetitorRequestBody(transcript) {
+  return {
+    model: 'claude-haiku-4-5-20251001',
+    max_tokens: 1024,
+    system: COMPETITOR_SYSTEM_PROMPT,
+    messages: [{ role: 'user', content: `Transcript:\n${transcript}\n\nExtract competitor mentions and return JSON.` }],
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Objection Tracker
+// ─────────────────────────────────────────────────────────────────
+
+const OBJECTION_SYSTEM_PROMPT = `You are a sales coaching analyst. Identify every customer objection, hesitation, or concern raised in this sales call transcript.
+
+Return ONLY valid JSON, no markdown fences:
+{
+  "objections": [
+    {
+      "category": "Price / ROI | Timing | Competition | Internal Approval | Feature Gap | Technical | Trust / Risk | Other",
+      "summary": "Short description of the objection (max 80 chars)",
+      "quote": "Verbatim or near-verbatim customer quote expressing the objection (max 150 chars)",
+      "repResponse": "How the sales rep responded to this objection (1 sentence, or null if unanswered)",
+      "handled": true | false,
+      "severity": "blocking" | "moderate" | "minor"
+    }
+  ],
+  "handledCount": 2,
+  "totalCount": 4,
+  "topRisk": "The single most critical unresolved objection, or null if all handled"
+}
+
+Rules:
+- "handled": true if the rep acknowledged AND addressed the objection with a substantive response
+- "severity": blocking = could kill the deal; moderate = needs follow-up; minor = easily addressed
+- Include implicit objections (hesitation, silence, changing subject) not just explicit ones
+- If no objections, return { "objections": [], "handledCount": 0, "totalCount": 0, "topRisk": null }`;
+
+export function buildObjectionRequestBody(transcript) {
+  return {
+    model: 'claude-haiku-4-5-20251001',
+    max_tokens: 1024,
+    system: OBJECTION_SYSTEM_PROMPT,
+    messages: [{ role: 'user', content: `Transcript:\n${transcript}\n\nExtract all objections and return JSON.` }],
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Minutes of Meeting
+// ─────────────────────────────────────────────────────────────────
+
+const MOM_SYSTEM_PROMPT = `You are a professional business analyst who writes clear, structured meeting minutes.
+Generate both internal and external versions of meeting minutes from the transcript.
+
+Return ONLY valid JSON, no markdown fences:
+{
+  "internal": "Full markdown meeting minutes for internal teams...",
+  "external": "Polished client-facing meeting summary in markdown..."
+}
+
+## INTERNAL VERSION
+Include all of the following in markdown:
+- **Meeting Overview**: type, date (if mentioned), participants (if named), estimated duration
+- **Executive Summary**: 2-3 sentences on the purpose and outcome
+- **Key Discussion Points**: bulleted list of main topics covered (be specific)
+- **Customer Pain Points & Requirements**: what the customer needs or is struggling with
+- **Objections & Concerns Raised**: any hesitations or pushback noted
+- **Decisions Made**: any agreed-upon decisions during the call
+- **Action Items**: table with columns: Action | Owner | Due Date (use "TBD" if not specified)
+- **Open Questions**: unresolved questions requiring follow-up
+- **Competitive Context**: competitors or alternatives mentioned (omit section if none)
+- **Next Steps**: concrete follow-up activities
+
+## EXTERNAL VERSION (client-facing)
+Professional, polished tone. Include:
+- **Meeting Summary**: 2-3 sentences on the purpose and what was accomplished
+- **Key Takeaways**: 3-5 bullet points of the most important outcomes
+- **Agreed Next Steps**: numbered list of specific follow-up actions
+- **Timeline & Commitments**: any dates or deadlines discussed
+Omit internal deliberations, competitive mentions, and coaching observations.
+
+Format each version as clean markdown that reads professionally when rendered.`;
+
+export function buildMOMRequestBody(transcript, meetingId) {
+  return {
+    model: 'claude-haiku-4-5-20251001',
+    max_tokens: 3000,
+    system: MOM_SYSTEM_PROMPT,
+    messages: [{
+      role: 'user',
+      content: `Meeting ID: ${meetingId || 'Unknown'}\n\nTranscript:\n${transcript}\n\nGenerate internal and external meeting minutes. Return JSON with "internal" and "external" keys.`,
+    }],
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Transcript Chat (streaming)
+// ─────────────────────────────────────────────────────────────────
+
+export function buildChatSystemPrompt(transcript) {
+  return `You are an AI assistant helping analyze a sales call transcript. Answer questions based ONLY on what is in the transcript below. Be concise, specific, and cite relevant parts when useful. If something is not mentioned in the transcript, say so clearly.
+
+Transcript:
+${transcript}`;
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Demo Scope Advisor
+// ─────────────────────────────────────────────────────────────────
+
+const DEMO_SCOPE_SYSTEM_PROMPT = `You are a Whatfix sales engineer scoping the right demo environment or POC based on a discovery call.
+
+${WHATFIX_CONTEXT}
+
+## YOUR TASK
+1. Detect the client's delivery platform from what is discussed: "web", "desktop", "mobile", "mixed", or "unknown".
+2. Identify the prospect's industry, company, target software, and Whatfix adoption goal.
+3. Determine call stage: discovery | demo_prep | poc | advanced.
+4. Recommend demo environments using the PLATFORM MATCHING RULES below.
+5. Determine if POC scope is defined (app access confirmed on the call?).
+6. Flag if a clone is needed for any recommended environment.
+
+## PLATFORM MATCHING RULES (apply in order)
+1. **Match the client's platform first**: Only recommend environments whose Type matches the client's platform (Web → Web envs, Desktop → Desktop envs, Mobile → Mobile envs). Do not mix platforms unless the client explicitly needs multi-platform.
+2. **Salesforce Lightning as Web default**: If the client is on a web-based app AND no domain-specific environment is a strong match (or scope is not well-defined), ALWAYS recommend the Salesforce Lightning demo (ID 10) as the primary. It covers the broadest set of Whatfix web features — Flows, Smart Tips, Beacons, Pop-ups, Task Lists, Self Help Widget, Surveys, Segments, Analytics — making it the best general-purpose web demo.
+3. **Domain-specific preferred when clear**: If the client's target app is clearly named and a matching env exists, prefer that over Salesforce Lightning. Still include Salesforce Lightning as an alternative if it would add value.
+4. **No platform match available**: If no environment of the matching type exists, recommend the closest available environments and note the platform gap in the summary. Do NOT silently recommend a wrong-platform env as primary without flagging it.
+5. **Mirror environments**: Suggest Mirror envs when training/simulation/AI Roleplay is discussed. They always require setup — set cloneNeeded: true with a brief setup note.
+6. **Down environments**: Always set cloneNeeded: true with cloneReason explaining the env is down.
+
+Return ONLY valid JSON, no markdown fences:
+{
+  "callStage": "discovery" | "demo_prep" | "poc" | "advanced",
+  "clientPlatform": "web" | "desktop" | "mobile" | "mixed" | "unknown",
+  "prospect": {
+    "industry": "Industry vertical (e.g. BFSI, HCM, ERP, Life Sciences, S2P/CLM, CRM, Other)",
+    "company": "Company name if mentioned, otherwise null",
+    "currentSoftware": ["List of software/apps the prospect currently uses or is evaluating"],
+    "adoptionFocus": "One sentence: what they want to use Whatfix for",
+    "useCases": ["Up to 4 short use case phrases mentioned"]
+  },
+  "pocScope": {
+    "defined": true | false,
+    "appAccessDiscussed": true | false,
+    "note": "One sentence on POC readiness"
+  },
+  "recommendations": [
+    {
+      "envId": 10,
+      "envName": "Name of the environment",
+      "reason": "Why this environment is a strong match (1-2 sentences)",
+      "cloneNeeded": false,
+      "cloneReason": null,
+      "priority": "primary"
+    },
+    {
+      "envId": 14,
+      "envName": "Name of the environment",
+      "reason": "Why this is a useful alternative (1 sentence)",
+      "cloneNeeded": false,
+      "cloneReason": null,
+      "priority": "alternative"
+    }
+  ],
+  "summary": "2-3 sentence executive summary of the scope recommendation and suggested next steps."
+}
+
+Rules:
+- recommendations: 1 primary + 0-3 alternatives. Only include relevant environments.
+- cloneNeeded: true if env is Down, is Mirror type, version mismatch, or config differs enough to warrant it.
+- If POC access confirmed, set pocScope.defined = true and note that the client's own app can be used.
+- envId must exactly match an ID from the provided environment list.`;
+
+export function buildDemoScopeRequestBody(transcript, envList) {
+  const envListText = envList.map(e =>
+    `ID ${e.id} | Domain: ${e.domain} | App: ${e.application} | Name: ${e.name} | Type: ${e.type} | Status: ${e.status || 'Unknown'}`
+  ).join('\n');
+
+  return {
+    model: 'claude-haiku-4-5-20251001',
+    max_tokens: 1500,
+    system: DEMO_SCOPE_SYSTEM_PROMPT,
+    messages: [{
+      role: 'user',
+      content: `## Available Demo Environments\n${envListText}\n\n## Call Transcript\n${transcript}\n\nAnalyze the transcript and return the demo scope recommendation JSON.`,
+    }],
+  };
+}
+
+export function buildChatRequestBody(transcript, messages) {
+  return {
+    model: 'claude-haiku-4-5-20251001',
+    max_tokens: 1024,
+    stream: true,
+    system: buildChatSystemPrompt(transcript),
+    messages: messages.map(m => ({ role: m.role, content: m.content })),
   };
 }

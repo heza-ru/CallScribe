@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Home, FileText, Lightbulb, BarChart2, Settings, Mic } from 'lucide-react';
+import { Home, FileText, Lightbulb, BarChart2, Settings, Mic, ClipboardList, MessageCircle, Target } from 'lucide-react';
 import { SCREENS } from '../constants';
 
 const ORANGE = '#E55014';
@@ -12,6 +12,9 @@ function getActiveNav(screen) {
     [SCREENS.ANALYSIS]:           'insights',
     [SCREENS.TICKET_REVIEW]:      'insights',
     [SCREENS.INTELLIGENCE]:       'intelligence',
+    [SCREENS.MOM]:                'mom',
+    [SCREENS.CHAT]:               'chat',
+    [SCREENS.DEMO_SCOPE]:         'demo_scope',
     [SCREENS.SETTINGS]:           'settings',
   };
   return map[screen] || 'home';
@@ -123,6 +126,27 @@ export function AppShell({ state, dispatch, children }) {
       screen:  SCREENS.INTELLIGENCE,
       enabled: hasTranscript,
       loading: loadingIntelligence,
+    },
+    {
+      id:      'mom',
+      icon:    ClipboardList,
+      label:   'Meeting Minutes',
+      screen:  SCREENS.MOM,
+      enabled: hasTranscript,
+    },
+    {
+      id:      'chat',
+      icon:    MessageCircle,
+      label:   'Chat with Call',
+      screen:  SCREENS.CHAT,
+      enabled: hasTranscript,
+    },
+    {
+      id:      'demo_scope',
+      icon:    Target,
+      label:   'Demo Scope',
+      screen:  SCREENS.DEMO_SCOPE,
+      enabled: hasTranscript,
     },
   ];
 

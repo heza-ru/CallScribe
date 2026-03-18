@@ -4,5 +4,8 @@ export const SCREENS = {
   ANALYSIS:           'analysis',
   INTELLIGENCE:       'intelligence',
   TICKET_REVIEW:      'ticket_review',
+  MOM:                'mom',
+  CHAT:               'chat',
+  DEMO_SCOPE:         'demo_scope',
   SETTINGS:           'settings',
 };

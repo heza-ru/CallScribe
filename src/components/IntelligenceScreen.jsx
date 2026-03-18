@@ -2,9 +2,10 @@ import { useState, useEffect } from 'react';
 import {
   ArrowLeft, MoreHorizontal, RefreshCw,
   CheckCircle2, XCircle, ThumbsUp, ThumbsDown,
-  Star, Target, TrendingUp,
+  Target, TrendingUp, Swords, ShieldAlert,
+  AlertTriangle, CheckCheck,
 } from 'lucide-react';
-import { analyzeTranscript, analyzeCallIntelligence } from '../services/claudeService';
+import { analyzeTranscript, analyzeCallIntelligence, detectCompetitors, trackObjections } from '../services/claudeService';
 import { SCREENS } from '../constants';
 
 const ORANGE = '#E55014';
@@ -382,12 +383,281 @@ function CoachingTab({ ci, onReanalyze, reanalyzing }) {
   );
 }
 
+// ── Competitors tab ─────────────────────────────────────────────
+
+const SENTIMENT_STYLE = {
+  positive: { bg: '#f0fdf4', color: '#16a34a', border: '#dcfce7' },
+  negative: { bg: '#fef2f2', color: '#dc2626', border: '#fecaca' },
+  neutral:  { bg: '#F5F7FA', color: '#6b7280', border: '#E4E9F0' },
+};
+
+function CompetitorsTab({ state, dispatch }) {
+  const [loading, setLoading] = useState(false);
+  const [error,   setError]   = useState(null);
+
+  const data = state.competitors;
+  const hasData = data && data !== 'loading' && data.competitors !== undefined;
+
+  async function handleDetect() {
+    setLoading(true);
+    setError(null);
+    dispatch({ type: 'COMPETITORS_LOADING' });
+    try {
+      const result = await detectCompetitors(state.transcript, state.settings?.claudeApiKey);
+      dispatch({ type: 'COMPETITORS_LOADED', competitors: result });
+    } catch (err) {
+      setError(err.message);
+      dispatch({ type: 'COMPETITORS_FAILED' });
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const isLoading = loading || data === 'loading';
+
+  return (
+    <div style={{ flex: 1, overflowY: 'auto', padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+      {error && (
+        <div style={{ background: '#fef2f2', color: '#dc2626', fontSize: 11.5, padding: '9px 12px', borderRadius: 7, border: '1px solid #fecaca' }}>
+          {error}
+        </div>
+      )}
+
+      {!hasData && !isLoading && (
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14, padding: '40px 16px', textAlign: 'center' }}>
+          <div style={{ width: 48, height: 48, borderRadius: 12, background: '#fff', border: '1px solid #E4E9F0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Swords size={22} style={{ color: '#C8D2DE' }} />
+          </div>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 800, color: NAVY, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 5 }}>Competitor Analysis</div>
+            <div style={{ fontSize: 12, color: '#8A97A8', lineHeight: 1.65, maxWidth: 200, margin: '0 auto 16px' }}>Detect every competitor, alternative tool, or build-vs-buy mention in this call.</div>
+            <button type="button" onClick={handleDetect}
+              style={{ display: 'flex', alignItems: 'center', gap: 6, margin: '0 auto', padding: '0 18px', height: 38, borderRadius: 8, border: 'none', background: ORANGE, color: '#fff', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', cursor: 'pointer' }}>
+              <Swords size={12} /> Detect Competitors
+            </button>
+          </div>
+        </div>
+      )}
+
+      {isLoading && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '16px 0', color: '#8A97A8', fontSize: 12, fontWeight: 600 }}>
+          <span style={{ width: 14, height: 14, border: '2px solid #E4E9F0', borderTopColor: ORANGE, borderRadius: '50%', animation: 'spin 0.7s linear infinite', display: 'inline-block', flexShrink: 0 }} />
+          Scanning for competitor mentions...
+        </div>
+      )}
+
+      {hasData && !isLoading && (
+        <>
+          {data.summary && (
+            <div style={{ background: '#fff', border: '1px solid #E4E9F0', borderRadius: 8, padding: '10px 12px', borderLeft: `3px solid ${ORANGE}` }}>
+              <div style={{ fontSize: 9.5, fontWeight: 700, color: '#8A97A8', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}>Summary</div>
+              <p style={{ margin: 0, fontSize: 12, color: '#4B5A6D', lineHeight: 1.6 }}>{data.summary}</p>
+            </div>
+          )}
+
+          {data.competitors.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '24px', color: '#8A97A8', fontSize: 12 }}>
+              No competitors mentioned in this call.
+            </div>
+          ) : (
+            data.competitors.map((c, i) => {
+              const sStyle = SENTIMENT_STYLE[c.sentiment] || SENTIMENT_STYLE.neutral;
+              return (
+                <div key={i} style={{ background: '#fff', borderRadius: 10, border: '1px solid #E4E9F0', padding: '12px 14px', animation: 'itemEnter 240ms cubic-bezier(0.22,1,0.36,1) both', animationDelay: `${i * 50}ms` }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <div style={{ width: 28, height: 28, borderRadius: 7, background: '#F5F7FA', border: '1px solid #E4E9F0', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        <Swords size={12} style={{ color: ORANGE }} strokeWidth={2.5} />
+                      </div>
+                      <div style={{ fontSize: 12, fontWeight: 800, color: NAVY }}>{c.name}</div>
+                    </div>
+                    <div style={{ display: 'flex', gap: 5, alignItems: 'center' }}>
+                      <span style={{ fontSize: 9, fontWeight: 700, color: sStyle.color, background: sStyle.bg, border: `1px solid ${sStyle.border}`, padding: '2px 6px', borderRadius: 4, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                        {c.sentiment || 'neutral'}
+                      </span>
+                      <span style={{ fontSize: 10, fontWeight: 700, color: '#A8B4C0' }}>×{c.mentions || 1}</span>
+                    </div>
+                  </div>
+                  {c.category && (
+                    <div style={{ fontSize: 10, color: '#8A97A8', fontWeight: 600, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{c.category}</div>
+                  )}
+                  {c.context && (
+                    <p style={{ margin: '0 0 8px', fontSize: 11.5, color: '#4B5A6D', lineHeight: 1.6 }}>{c.context}</p>
+                  )}
+                  {c.quotes?.length > 0 && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                      {c.quotes.map((q, qi) => (
+                        <div key={qi} style={{ borderLeft: `2px solid #E4E9F0`, paddingLeft: 8, fontSize: 11, color: '#8A97A8', fontStyle: 'italic', lineHeight: 1.55 }}>
+                          "{q}"
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })
+          )}
+
+          <button type="button" onClick={handleDetect} style={{ display: 'flex', alignItems: 'center', gap: 5, margin: '4px auto 0', padding: '0 14px', height: 32, borderRadius: 7, border: '1px solid #E4E9F0', background: '#fff', color: '#8A97A8', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', cursor: 'pointer' }}>
+            <RefreshCw size={10} /> Re-run
+          </button>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── Objections tab ──────────────────────────────────────────────
+
+const SEVERITY_STYLE = {
+  blocking: { bg: '#fef2f2', color: '#dc2626', border: '#fecaca' },
+  moderate: { bg: '#fffbeb', color: '#d97706', border: '#fde68a' },
+  minor:    { bg: '#F5F7FA', color: '#6b7280', border: '#E4E9F0' },
+};
+
+function ObjectionsTab({ state, dispatch }) {
+  const [loading, setLoading] = useState(false);
+  const [error,   setError]   = useState(null);
+
+  const data = state.objections;
+  const hasData = data && data !== 'loading' && data.objections !== undefined;
+  const isLoading = loading || data === 'loading';
+
+  async function handleDetect() {
+    setLoading(true);
+    setError(null);
+    dispatch({ type: 'OBJECTIONS_LOADING' });
+    try {
+      const result = await trackObjections(state.transcript, state.settings?.claudeApiKey);
+      dispatch({ type: 'OBJECTIONS_LOADED', objections: result });
+    } catch (err) {
+      setError(err.message);
+      dispatch({ type: 'OBJECTIONS_FAILED' });
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div style={{ flex: 1, overflowY: 'auto', padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+      {error && (
+        <div style={{ background: '#fef2f2', color: '#dc2626', fontSize: 11.5, padding: '9px 12px', borderRadius: 7, border: '1px solid #fecaca' }}>
+          {error}
+        </div>
+      )}
+
+      {!hasData && !isLoading && (
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14, padding: '40px 16px', textAlign: 'center' }}>
+          <div style={{ width: 48, height: 48, borderRadius: 12, background: '#fff', border: '1px solid #E4E9F0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <ShieldAlert size={22} style={{ color: '#C8D2DE' }} />
+          </div>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 800, color: NAVY, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 5 }}>Objection Tracker</div>
+            <div style={{ fontSize: 12, color: '#8A97A8', lineHeight: 1.65, maxWidth: 200, margin: '0 auto 16px' }}>Identify all customer objections, how they were handled, and what remains unresolved.</div>
+            <button type="button" onClick={handleDetect}
+              style={{ display: 'flex', alignItems: 'center', gap: 6, margin: '0 auto', padding: '0 18px', height: 38, borderRadius: 8, border: 'none', background: ORANGE, color: '#fff', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', cursor: 'pointer' }}>
+              <ShieldAlert size={12} /> Track Objections
+            </button>
+          </div>
+        </div>
+      )}
+
+      {isLoading && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '16px 0', color: '#8A97A8', fontSize: 12, fontWeight: 600 }}>
+          <span style={{ width: 14, height: 14, border: '2px solid #E4E9F0', borderTopColor: ORANGE, borderRadius: '50%', animation: 'spin 0.7s linear infinite', display: 'inline-block', flexShrink: 0 }} />
+          Identifying objections...
+        </div>
+      )}
+
+      {hasData && !isLoading && (
+        <>
+          {/* Summary strip */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+            {[
+              { label: 'Total', value: data.totalCount, color: NAVY },
+              { label: 'Handled', value: data.handledCount, color: '#16a34a' },
+            ].map(({ label, value, color }) => (
+              <div key={label} style={{ background: '#fff', borderRadius: 8, border: '1px solid #E4E9F0', padding: '10px 12px', textAlign: 'center' }}>
+                <div style={{ fontSize: 22, fontWeight: 900, color, lineHeight: 1 }}>{value}</div>
+                <div style={{ fontSize: 10, fontWeight: 700, color: '#8A97A8', textTransform: 'uppercase', letterSpacing: '0.06em', marginTop: 3 }}>{label}</div>
+              </div>
+            ))}
+          </div>
+
+          {data.topRisk && (
+            <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, padding: '10px 12px', display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+              <AlertTriangle size={13} style={{ color: '#dc2626', flexShrink: 0, marginTop: 1 }} />
+              <div>
+                <div style={{ fontSize: 10, fontWeight: 700, color: '#dc2626', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 2 }}>Top Unresolved Risk</div>
+                <div style={{ fontSize: 12, color: '#4B5A6D', lineHeight: 1.55 }}>{data.topRisk}</div>
+              </div>
+            </div>
+          )}
+
+          {data.objections.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '24px', color: '#8A97A8', fontSize: 12 }}>
+              No objections detected in this call.
+            </div>
+          ) : (
+            data.objections.map((obj, i) => {
+              const sStyle = SEVERITY_STYLE[obj.severity] || SEVERITY_STYLE.minor;
+              return (
+                <div key={i} style={{ background: '#fff', borderRadius: 10, border: '1px solid #E4E9F0', overflow: 'hidden', animation: 'itemEnter 240ms cubic-bezier(0.22,1,0.36,1) both', animationDelay: `${i * 50}ms` }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '9px 12px', borderBottom: '1px solid #F5F7FA' }}>
+                    <div style={{ display: 'flex', gap: 5 }}>
+                      <span style={{ fontSize: 9, fontWeight: 800, color: sStyle.color, background: sStyle.bg, border: `1px solid ${sStyle.border}`, padding: '2px 6px', borderRadius: 4, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                        {obj.severity || 'minor'}
+                      </span>
+                      <span style={{ fontSize: 9, fontWeight: 700, color: '#4B5A6D', background: '#F5F7FA', padding: '2px 6px', borderRadius: 4, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                        {obj.category}
+                      </span>
+                    </div>
+                    {obj.handled
+                      ? <CheckCheck size={13} style={{ color: '#16a34a' }} strokeWidth={2.5} />
+                      : <XCircle   size={13} style={{ color: '#C8D2DE' }} strokeWidth={2} />
+                    }
+                  </div>
+                  <div style={{ padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: NAVY }}>{obj.summary}</div>
+                    {obj.quote && (
+                      <div style={{ borderLeft: `2px solid #E4E9F0`, paddingLeft: 8, fontSize: 11, color: '#8A97A8', fontStyle: 'italic', lineHeight: 1.55 }}>
+                        "{obj.quote}"
+                      </div>
+                    )}
+                    {obj.repResponse && (
+                      <div style={{ display: 'flex', gap: 6, alignItems: 'flex-start' }}>
+                        <div style={{ width: 4, height: 4, borderRadius: '50%', background: obj.handled ? '#22c55e' : '#C8D2DE', flexShrink: 0, marginTop: 6 }} />
+                        <div style={{ fontSize: 11.5, color: '#4B5A6D', lineHeight: 1.55 }}>
+                          <span style={{ fontWeight: 700, color: obj.handled ? '#16a34a' : '#8A97A8' }}>
+                            {obj.handled ? 'Handled: ' : 'Response: '}
+                          </span>
+                          {obj.repResponse}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })
+          )}
+
+          <button type="button" onClick={handleDetect} style={{ display: 'flex', alignItems: 'center', gap: 5, margin: '4px auto 0', padding: '0 14px', height: 32, borderRadius: 7, border: '1px solid #E4E9F0', background: '#fff', color: '#8A97A8', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', cursor: 'pointer' }}>
+            <RefreshCw size={10} /> Re-run
+          </button>
+        </>
+      )}
+    </div>
+  );
+}
+
 // ── Main screen ────────────────────────────────────────────────
 
 const TABS = [
-  { key: 'insights',  label: 'Insights' },
-  { key: 'sentiment', label: 'Sentiment' },
-  { key: 'coaching',  label: 'Coaching' },
+  { key: 'insights',    label: 'Insights' },
+  { key: 'sentiment',   label: 'Sentiment' },
+  { key: 'coaching',    label: 'Coaching' },
+  { key: 'competitors', label: 'Competitors' },
+  { key: 'objections',  label: 'Objections' },
 ];
 
 export function IntelligenceScreen({ state, dispatch }) {
@@ -540,9 +810,11 @@ export function IntelligenceScreen({ state, dispatch }) {
 
       {/* Tab content */}
       <div key={tab} style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', animation: 'tabEnter 200ms cubic-bezier(0.22,1,0.36,1) both' }}>
-        {tab === 'insights'  && <InsightsTab  ci={ci} />}
-        {tab === 'sentiment' && <SentimentTab ci={ci} />}
-        {tab === 'coaching'  && <CoachingTab  ci={ci} onReanalyze={handleReanalyze} reanalyzing={reanalyzing} />}
+        {tab === 'insights'    && <InsightsTab    ci={ci} />}
+        {tab === 'sentiment'   && <SentimentTab   ci={ci} />}
+        {tab === 'coaching'    && <CoachingTab    ci={ci} onReanalyze={handleReanalyze} reanalyzing={reanalyzing} />}
+        {tab === 'competitors' && <CompetitorsTab state={state} dispatch={dispatch} />}
+        {tab === 'objections'  && <ObjectionsTab  state={state} dispatch={dispatch} />}
       </div>
     </div>
   );

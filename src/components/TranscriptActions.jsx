@@ -1,7 +1,7 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import {
   Download, Sparkles, TicketCheck,
-  CheckCircle2, Users, AlignLeft, Clock, ChevronDown,
+  CheckCircle2, Users, AlignLeft, Clock, ChevronDown, Search, X,
 } from 'lucide-react';
 import { analyzeTranscript, analyzeCallIntelligence } from '../services/claudeService';
 import { downloadTranscript } from '../utils/transcriptFormatter';
@@ -42,12 +42,29 @@ function groupLines(lines) {
   return blocks;
 }
 
+function HighlightText({ text, query }) {
+  if (!query) return <>{text}</>;
+  const regex = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+  const parts = text.split(regex);
+  return (
+    <>
+      {parts.map((part, i) =>
+        regex.test(part)
+          ? <mark key={i} style={{ background: '#FFF4EF', color: ORANGE, borderRadius: 2, padding: '0 1px', fontWeight: 700 }}>{part}</mark>
+          : part
+      )}
+    </>
+  );
+}
+
 export function TranscriptActions({ state, dispatch }) {
   const [analyzing,    setAnalyzing]    = useState(false);
   const [error,        setError]        = useState(null);
   const [downloadOpen, setDownloadOpen] = useState(false);
   const [downloaded,   setDownloaded]   = useState(null);
+  const [searchQuery,  setSearchQuery]  = useState('');
   const downloadRef = useRef(null);
+  const searchRef   = useRef(null);
 
   useEffect(() => {
     if (!downloadOpen) return;
@@ -167,19 +184,66 @@ export function TranscriptActions({ state, dispatch }) {
         ))}
       </div>
 
+      {/* Search bar */}
+      <div style={{ flexShrink: 0, padding: '8px 16px', background: '#fff', borderBottom: '1px solid #E4E9F0' }}>
+        <div style={{ position: 'relative' }}>
+          <Search size={12} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: '#A8B4C0', pointerEvents: 'none' }} />
+          <input
+            ref={searchRef}
+            type="text"
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            placeholder="Search transcript..."
+            style={{
+              width: '100%', padding: '7px 30px 7px 28px',
+              fontFamily: 'var(--font-sans)', fontSize: 12,
+              background: '#F5F7FA', border: '1.5px solid #E4E9F0',
+              borderRadius: 7, outline: 'none', color: NAVY,
+              transition: 'border-color 150ms',
+            }}
+            onFocus={e => { e.target.style.borderColor = ORANGE; e.target.style.background = '#fff'; }}
+            onBlur={e => { e.target.style.borderColor = '#E4E9F0'; e.target.style.background = '#F5F7FA'; }}
+          />
+          {searchQuery && (
+            <button type="button" onClick={() => setSearchQuery('')}
+              style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', padding: 2, display: 'flex', color: '#A8B4C0' }}
+              onMouseEnter={e => (e.currentTarget.style.color = NAVY)}
+              onMouseLeave={e => (e.currentTarget.style.color = '#A8B4C0')}
+            >
+              <X size={11} strokeWidth={2.5} />
+            </button>
+          )}
+        </div>
+        {searchQuery && (() => {
+          const q = searchQuery.toLowerCase();
+          const matchCount = blocks.reduce((n, b) => n + b.texts.filter(t => t.toLowerCase().includes(q)).length, 0);
+          return (
+            <div style={{ fontSize: 10, color: matchCount > 0 ? ORANGE : '#A8B4C0', fontWeight: 600, marginTop: 5, letterSpacing: '0.04em' }}>
+              {matchCount > 0 ? `${matchCount} match${matchCount !== 1 ? 'es' : ''}` : 'No matches'}
+            </div>
+          );
+        })()}
+      </div>
+
       {/* Transcript content */}
+      {(() => {
+        const q = searchQuery.trim().toLowerCase();
+        const visibleBlocks = q
+          ? blocks.filter(b => b.speaker?.toLowerCase().includes(q) || b.texts.some(t => t.toLowerCase().includes(q)))
+          : blocks;
+        return (
       <div style={{
         flex: 1, minHeight: 0,
         overflowY: 'auto', overflowX: 'hidden',
         padding: '12px 16px',
         display: 'flex', flexDirection: 'column', gap: 6,
       }}>
-        {blocks.length === 0 ? (
+        {visibleBlocks.length === 0 ? (
           <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#8A97A8', fontSize: 12 }}>
-            No transcript content.
+            {searchQuery ? 'No matching blocks.' : 'No transcript content.'}
           </div>
         ) : (
-          blocks.map((block, i) => (
+          visibleBlocks.map((block, i) => (
             <div key={i} style={{
               background: '#fff', borderRadius: 8, padding: '10px 12px',
               border: '1px solid #E4E9F0',
@@ -207,7 +271,7 @@ export function TranscriptActions({ state, dispatch }) {
                     margin: 0, fontSize: 12, color: '#4B5A6D',
                     lineHeight: 1.65, fontWeight: 400,
                   }}>
-                    {text}
+                    <HighlightText text={text} query={searchQuery.trim()} />
                   </p>
                 ))}
               </div>
@@ -215,6 +279,8 @@ export function TranscriptActions({ state, dispatch }) {
           ))
         )}
       </div>
+        );
+      })()}
 
       {/* Error banner */}
       {error && (
