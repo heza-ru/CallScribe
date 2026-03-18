@@ -266,28 +266,45 @@ export function buildIntelligenceRequestBody(transcript, meetingId) {
 // Competitor Detection
 // ─────────────────────────────────────────────────────────────────
 
-const COMPETITOR_SYSTEM_PROMPT = `You are a competitive intelligence analyst. Extract every competitor or alternative solution mentioned in this sales call transcript.
+const COMPETITOR_SYSTEM_PROMPT = `You are a competitive intelligence analyst for Whatfix, a Digital Adoption Platform (DAP).
+Extract only tools and approaches that compete with or could replace Whatfix in this sales call.
+
+## WHAT TO CAPTURE
+Only include mentions of tools/approaches in these categories:
+
+| Category | Examples |
+|----------|---------|
+| **DAP / In-app guidance** | WalkMe, Pendo, Appcues, Userpilot, UserGuiding, Apty, Spekit, Opus Guide, Chameleon, Intercom Product Tours, Gainsight PX |
+| **SOP / Process documentation** | Scribe, Tango, Trainual, Notion, Confluence, Loom, Guru, Tettra, Process Street |
+| **Chatbots / AI assistants** | Intercom, Drift, Freshdesk, Zendesk bots, ServiceNow Virtual Agent, Microsoft Copilot, custom GPT bots used for in-app help |
+| **Training / LMS platforms** | Docebo, Cornerstone, SAP Litmos, TalentLMS, 360Learning (when positioned as adoption alternative) |
+| **Custom / internal builds** | Any mention of "building in-house", "custom tooltips", "homegrown solution", internal wikis used as substitute |
+| **Analytics platforms** | Amplitude, Heap, Mixpanel, FullStory (when used as alternative to Whatfix Product Analytics) |
+
+## WHAT TO IGNORE
+- The client's own core business applications (Salesforce, SAP, Workday, etc.) — these are the apps Whatfix runs ON, not competitors
+- Business tools the customer uses day-to-day that have no adoption/guidance component
+- Whatfix itself (do not list Whatfix as a competitor)
 
 Return ONLY valid JSON, no markdown fences:
 {
   "competitors": [
     {
-      "name": "Competitor / product name",
-      "category": "Direct competitor | Alternative approach | Internal tool | Other",
+      "name": "Tool / approach name",
+      "category": "DAP | SOP Creator | Chatbot / AI Assistant | LMS / Training | Custom Build | Analytics | Other",
       "mentions": 3,
       "sentiment": "positive" | "negative" | "neutral",
-      "quotes": ["Verbatim or near-verbatim quote from the transcript mentioning this competitor"],
-      "context": "One sentence: why was this competitor mentioned and what is the customer's relationship with them?"
+      "quotes": ["Verbatim or near-verbatim quote from the transcript (max 120 chars)"],
+      "context": "One sentence: how is this tool being used or considered, and what does it mean for the Whatfix deal?"
     }
   ],
-  "summary": "One sentence overall competitive landscape summary for this call."
+  "summary": "One sentence competitive landscape summary focused on the biggest displacement risk."
 }
 
 Rules:
-- Include any company name, product, tool, or approach the customer uses or is considering as an alternative
-- "quotes" array: 1-3 short verbatim excerpts (max 120 chars each)
-- If no competitors are mentioned, return { "competitors": [], "summary": "No competitors mentioned in this call." }
-- Do not invent competitors — only extract what is explicitly mentioned`;
+- "quotes": 1-3 short excerpts per competitor
+- If no relevant tools are mentioned, return { "competitors": [], "summary": "No DAP or adoption-space competitors mentioned in this call." }
+- Do not invent or hallucinate tools — only extract what is explicitly mentioned`;
 
 export function buildCompetitorRequestBody(transcript) {
   return {

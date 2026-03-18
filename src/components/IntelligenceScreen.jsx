@@ -28,11 +28,11 @@ function Tab({ label, active, onClick }) {
   return (
     <button type="button" onClick={onClick}
       style={{
-        padding: '10px 14px 9px', background: 'none', border: 'none',
-        cursor: 'pointer', fontSize: 11,
+        padding: '10px 10px 9px', background: 'none', border: 'none',
+        cursor: 'pointer', fontSize: 10.5, whiteSpace: 'nowrap', flexShrink: 0,
         fontWeight: active ? 800 : 600,
         color: active ? NAVY : '#8A97A8',
-        textTransform: 'uppercase', letterSpacing: '0.08em',
+        textTransform: 'uppercase', letterSpacing: '0.07em',
         borderBottom: active ? `2px solid ${ORANGE}` : '2px solid transparent',
         transition: 'color 120ms, border-color 120ms',
         marginBottom: -1,
@@ -430,7 +430,7 @@ function CompetitorsTab({ state, dispatch }) {
           </div>
           <div>
             <div style={{ fontSize: 13, fontWeight: 800, color: NAVY, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 5 }}>Competitor Analysis</div>
-            <div style={{ fontSize: 12, color: '#8A97A8', lineHeight: 1.65, maxWidth: 200, margin: '0 auto 16px' }}>Detect every competitor, alternative tool, or build-vs-buy mention in this call.</div>
+            <div style={{ fontSize: 12, color: '#8A97A8', lineHeight: 1.65, maxWidth: 200, margin: '0 auto 16px' }}>Detect DAP tools, SOP creators, chatbots, LMS platforms, and custom builds competing with Whatfix.</div>
             <button type="button" onClick={handleDetect}
               style={{ display: 'flex', alignItems: 'center', gap: 6, margin: '0 auto', padding: '0 18px', height: 38, borderRadius: 8, border: 'none', background: ORANGE, color: '#fff', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', cursor: 'pointer' }}>
               <Swords size={12} /> Detect Competitors
@@ -797,11 +797,12 @@ export function IntelligenceScreen({ state, dispatch }) {
         </div>
       )}
 
-      {/* Tab bar */}
-      <div style={{
+      {/* Tab bar — scrollable so all tabs are reachable at any width */}
+      <div className="tab-bar-scroll" style={{
         display: 'flex', flexShrink: 0,
         background: '#fff', borderBottom: '1px solid #E4E9F0',
-        padding: '0 16px',
+        padding: '0 8px',
+        overflowX: 'auto',
       }}>
         {TABS.map(({ key, label }) => (
           <Tab key={key} label={label} active={tab === key} onClick={() => setTab(key)} />

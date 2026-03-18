@@ -387,3 +387,14 @@ label {
   overflow-y: auto;
   overflow-x: hidden;
 }
+
+/* ============================================================
+   Tab bar — horizontal scroll with hidden scrollbar
+   ============================================================ */
+.tab-bar-scroll {
+  scrollbar-width: none;        /* Firefox */
+  -ms-overflow-style: none;     /* IE / Edge */
+}
+.tab-bar-scroll::-webkit-scrollbar {
+  display: none;                /* Chrome / Safari */
+}
