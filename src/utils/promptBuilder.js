@@ -133,7 +133,9 @@ Example:
   }
 ]
 
-If no actionable Whatfix product insights exist, return: []`;
+If no actionable Whatfix product insights exist, return: []
+
+CONSISTENCY RULE: Given the same transcript, always produce the same insights in the same order with the same titles, descriptions, priorities, and types. Do not vary phrasing between runs.`;
 
 export function buildUserMessage(transcript, meetingId) {
   return `Meeting ID: ${meetingId || 'Unknown'}
@@ -148,6 +150,7 @@ export function buildRequestBody(transcript, meetingId) {
   return {
     model: 'claude-haiku-4-5-20251001',
     max_tokens: 4096,
+    temperature: 0,
     system: SYSTEM_PROMPT,
     messages: [
       {
@@ -237,7 +240,8 @@ Rules:
 - nextSteps: 2-4 concrete, actionable items
 - effectiveness and customerSentiment.score: integers 1-10
 - questionsAnsweredPct: integer 0-100
-- If the transcript is too short or unclear to analyze, still return valid JSON with low scores`;
+- If the transcript is too short or unclear to analyze, still return valid JSON with low scores
+- CONSISTENCY RULE: Given the same transcript, always produce identical scores, labels, themes, and text across runs. Do not vary phrasing between runs.`;
 
 export function buildIntelligenceUserMessage(transcript, meetingId) {
   return `Meeting ID: ${meetingId || 'Unknown'}
@@ -252,6 +256,7 @@ export function buildIntelligenceRequestBody(transcript, meetingId) {
   return {
     model: 'claude-haiku-4-5-20251001',
     max_tokens: 2048,
+    temperature: 0,
     system: INTELLIGENCE_SYSTEM_PROMPT,
     messages: [
       {
@@ -304,12 +309,14 @@ Return ONLY valid JSON, no markdown fences:
 Rules:
 - "quotes": 1-3 short excerpts per competitor
 - If no relevant tools are mentioned, return { "competitors": [], "summary": "No DAP or adoption-space competitors mentioned in this call." }
-- Do not invent or hallucinate tools — only extract what is explicitly mentioned`;
+- Do not invent or hallucinate tools — only extract what is explicitly mentioned
+- CONSISTENCY RULE: Given the same transcript, always produce the same competitors, quotes, and summary across runs.`;
 
 export function buildCompetitorRequestBody(transcript) {
   return {
     model: 'claude-haiku-4-5-20251001',
     max_tokens: 1024,
+    temperature: 0,
     system: COMPETITOR_SYSTEM_PROMPT,
     messages: [{ role: 'user', content: `Transcript:\n${transcript}\n\nExtract competitor mentions and return JSON.` }],
   };
@@ -348,6 +355,7 @@ export function buildObjectionRequestBody(transcript) {
   return {
     model: 'claude-haiku-4-5-20251001',
     max_tokens: 1024,
+    temperature: 0,
     system: OBJECTION_SYSTEM_PROMPT,
     messages: [{ role: 'user', content: `Transcript:\n${transcript}\n\nExtract all objections and return JSON.` }],
   };
@@ -393,6 +401,7 @@ export function buildMOMRequestBody(transcript, meetingId) {
   return {
     model: 'claude-haiku-4-5-20251001',
     max_tokens: 3000,
+    temperature: 0,
     system: MOM_SYSTEM_PROMPT,
     messages: [{
       role: 'user',
@@ -487,10 +496,106 @@ export function buildDemoScopeRequestBody(transcript, envList) {
   return {
     model: 'claude-haiku-4-5-20251001',
     max_tokens: 1500,
+    temperature: 0,
     system: DEMO_SCOPE_SYSTEM_PROMPT,
     messages: [{
       role: 'user',
       content: `## Available Demo Environments\n${envListText}\n\n## Call Transcript\n${transcript}\n\nAnalyze the transcript and return the demo scope recommendation JSON.`,
+    }],
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Executive Demo Analysis
+// ─────────────────────────────────────────────────────────────────
+
+export const EXEC_SUMMARY_SYSTEM_PROMPT = `You are a senior sales solutions analyst reviewing a Whatfix demo call transcript.
+Analyze the transcript deeply and extract insights in a structured format focusing on demo storytelling, product positioning, differentiation, and customer handling.
+
+Important context for your analysis:
+* Assume this may be an early-stage or first demo call unless the transcript clearly shows otherwise.
+* Do not penalize the team for not covering every product capability, differentiator, technical detail, or InfoSec topic in the first call.
+* Evaluate the demo in the right context:
+  * Did it establish relevance?
+  * Did it connect with customer pain points?
+  * Did it tell a clear story?
+  * Did it create enough value and curiosity for a second / deeper call?
+* In the differentiation section, separate: differentiators appropriately introduced in this call vs differentiators better reserved for later calls.
+* In gaps / improvements, distinguish between: true misses in this call vs topics better handled in next calls.
+* Be practical and realistic. Do not expect a full late-stage evaluation from an early discovery/demo conversation.
+
+Analyse these 8 dimensions thoroughly:
+
+1. Demo Storyline & Flow — Who attended (prospect + Whatfix), how demo was structured, what narrative was used, was it tailored or generic, did flow logically connect use case → feature → value, was it appropriate for the call stage.
+
+2. Use Cases & Product Positioning — What use cases were presented, which products/modules introduced (DAP, Mirror, Product Analytics, AI Agents, etc.), how clearly products mapped to customer problems, was breadth/depth right for this stage.
+
+3. Feature Demonstration Quality — Key features demonstrated, mapped to product/module + customer use case, evaluation: features shown with business context or just shown? Outcomes articulated? Level of detail appropriate for early stage?
+
+4. Whatfix Differentiation Analysis — Differentiators explicitly or implicitly presented: how positioned, tied to pain or just stated, compared against alternatives. Then: missed differentiators (lightly introduceable now vs save for later). Did it answer "Why Whatfix?" and "Why Whatfix vs others?"
+
+5. Customer Questions, Objections & Responses — All customer questions categorised (Product capability / Use case fit / Pricing-ROI / Competition / Implementation / Security-InfoSec). For each: response given, quality (clear/partial/deflected/unanswered). Highlight weak or missed responses. Note if unanswered points are real issues now or can be addressed later.
+
+6. InfoSec / Deployment Deep Dive — Mentions of security concerns, data privacy, deployment model, compliance. How well handled for the deal stage. Which were reasonably deferred vs real deal risks needing follow-up.
+
+7. Gaps & Missed Opportunities — Where the demo lacked personalization, missed feature→value links, failed to highlight differentiation, lost narrative control, had technical/positioning/storytelling gaps. Separate genuine misses from acceptable topics for later.
+
+8. Opportunities & Improvements — What could have been done better: flow improvements, stronger differentiation, better feature-value mapping, stronger use case anchoring, better customer handling. What additional capabilities for next calls. What to avoid. Suggested next best actions.
+
+OUTPUT FORMAT:
+Return ONLY valid JSON, no markdown fences, no preamble:
+{
+  "storyline": "Markdown-formatted analysis of Demo Storyline & Flow. Use ### sub-headers and - bullet points.",
+  "useCases": "Markdown-formatted analysis of Use Cases & Product Positioning.",
+  "featureDemoQuality": "Markdown-formatted analysis of Feature Demonstration Quality.",
+  "differentiation": "Markdown-formatted analysis of Whatfix Differentiation Analysis.",
+  "questionsObjections": "Markdown-formatted analysis of Customer Questions, Objections & Responses.",
+  "infosec": "Markdown-formatted analysis of InfoSec / Deployment Deep Dive.",
+  "gaps": "Markdown-formatted analysis of Gaps & Missed Opportunities.",
+  "improvements": "Markdown-formatted analysis of Opportunities & Improvements.",
+  "scores": {
+    "storytellingFlow":       { "score": 4, "rationale": "One sentence justification." },
+    "useCaseAlignment":       { "score": 3, "rationale": "One sentence justification." },
+    "featureValueMapping":    { "score": 4, "rationale": "One sentence justification." },
+    "differentiationClarity": { "score": 3, "rationale": "One sentence justification." },
+    "objectionHandling":      { "score": 4, "rationale": "One sentence justification." },
+    "overallEffectiveness":   { "score": 4, "rationale": "One sentence justification." }
+  },
+  "executiveSummary": [
+    "Customer intent: ...",
+    "Key strength: ...",
+    "Key risk: ...",
+    "Differentiation strength: ...",
+    "Deal momentum: ..."
+  ],
+  "followUpActions": [
+    "Action 1 — focused on closing unanswered questions",
+    "Action 2 — addressing InfoSec / deployment concerns",
+    "Action 3 — strengthening differentiation in later calls",
+    "Action 4 — defining POC / pilot or next demo scope",
+    "Action 5 — stakeholder alignment"
+  ]
+}
+
+Rules:
+- All 8 section values must be properly formatted markdown strings with - bullet points and ### sub-headers.
+- Add timestamps for major points wherever possible (e.g. [~5:20]).
+- scores: integers 1-5 only. Score with the correct lens for an early-stage / first call.
+- executiveSummary: exactly 5 bullets covering intent, strengths, risks, differentiation, deal momentum.
+- followUpActions: exactly 5 specific, actionable, commercially sharp follow-ups.
+- Write in plain business English. Be concise, structured, and commercially sharp.
+- Do not use any emoji, checkmarks, cross marks, tick symbols, or special Unicode symbols anywhere in the output. Plain text only.
+- CONSISTENCY RULE: Given the same transcript, always produce identical analysis, scores, and text across runs.`;
+
+export function buildExecSummaryRequestBody(transcript) {
+  return {
+    model: 'claude-sonnet-4-6',
+    max_tokens: 8192,
+    temperature: 0,
+    system: EXEC_SUMMARY_SYSTEM_PROMPT,
+    messages: [{
+      role: 'user',
+      content: `Transcript:\n${transcript}\n\nGenerate the comprehensive executive demo analysis. Return JSON only.`,
     }],
   };
 }

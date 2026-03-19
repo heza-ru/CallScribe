@@ -1,13 +1,14 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import {
   AlertTriangle, CheckCircle2, Loader2,
   ArrowRight, RefreshCw, Settings,
   Info, RotateCcw, FileText, ListChecks, BarChart2,
-  ClipboardList, MessageCircle, Target,
+  ClipboardList, MessageCircle, Target, PackageOpen, BookOpen,
 } from 'lucide-react';
 import { SCREENS } from '../constants';
 import { parseChunks } from '../utils/mindtickleParser';
-import { analyzeCallIntelligence } from '../services/claudeService';
+import { analyzeCallIntelligence, generateExecSummary } from '../services/claudeService';
+import { downloadFullReport } from '../utils/analysisFormatter';
 
 const STATUS = { CHECKING: 'checking', FOUND: 'found', NOT_FOUND: 'not_found', ERROR: 'error' };
 const ORANGE = '#E55014';
@@ -86,40 +87,57 @@ function APIStatusCard({ settings }) {
 }
 
 export function DetectionScreen({ state, dispatch }) {
-  const [status,  setStatus]  = useState(STATUS.CHECKING);
-  const [busyOp,  setBusyOp]  = useState(null); // null | 'sync' | 'transcribe' | 'insights' | 'actionables'
+  const [status,       setStatus]       = useState(STATUS.CHECKING);
+  const [busyOp,       setBusyOp]       = useState(null); // null | 'sync' | 'transcribe' | 'insights' | 'actionables'
+  const [reportDlOpen, setReportDlOpen] = useState(false);
+  const reportDlRef = useRef(null);
 
   useEffect(() => { detect(); }, []);
 
+  useEffect(() => {
+    if (!reportDlOpen) return;
+    function onDown(e) { if (reportDlRef.current && !reportDlRef.current.contains(e.target)) setReportDlOpen(false); }
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [reportDlOpen]);
+
   function detect() {
     setStatus(STATUS.CHECKING);
-    chrome.runtime.sendMessage({ type: 'GET_TAB_STATE' }, (res) => {
-      if (chrome.runtime.lastError) { setStatus(STATUS.ERROR); return; }
-      if (res?.found && res?.meetingId) {
-        dispatch({ type: 'TRANSCRIPT_DETECTED', meetingId: res.meetingId, token: res.token });
-        setStatus(STATUS.FOUND);
-      } else {
-        setStatus(STATUS.NOT_FOUND);
-      }
-    });
+    if (!chrome?.runtime) { setStatus(STATUS.ERROR); return; }
+    try {
+      chrome.runtime.sendMessage({ type: 'GET_TAB_STATE' }, (res) => {
+        if (chrome.runtime.lastError) { setStatus(STATUS.ERROR); return; }
+        if (res?.found && res?.meetingId) {
+          dispatch({ type: 'TRANSCRIPT_DETECTED', meetingId: res.meetingId, token: res.token });
+          setStatus(STATUS.FOUND);
+        } else {
+          setStatus(STATUS.NOT_FOUND);
+        }
+      });
+    } catch { setStatus(STATUS.ERROR); }
   }
 
   // Returns transcript text — fetches from API if not already loaded
   function ensureTranscript() {
     if (state.transcript) return Promise.resolve(state.transcript);
+    if (!chrome?.runtime) return Promise.reject(new Error('Extension context unavailable. Try reloading the page.'));
     return new Promise((resolve, reject) => {
-      chrome.runtime.sendMessage(
-        { type: 'FETCH_TRANSCRIPT', meetingId: state.meetingId, token: state.token },
-        (res) => {
-          if (chrome.runtime.lastError || !res?.success) {
-            reject(new Error(res?.error || 'Failed to fetch transcript'));
-            return;
+      try {
+        chrome.runtime.sendMessage(
+          { type: 'FETCH_TRANSCRIPT', meetingId: state.meetingId, token: state.token },
+          (res) => {
+            if (chrome.runtime.lastError || !res?.success) {
+              reject(new Error(res?.error || 'Failed to fetch transcript'));
+              return;
+            }
+            const { plainText } = parseChunks(res.chunks);
+            dispatch({ type: 'TRANSCRIPT_LOADED', chunks: res.chunks, transcript: plainText });
+            resolve(plainText);
           }
-          const { plainText } = parseChunks(res.chunks);
-          dispatch({ type: 'TRANSCRIPT_LOADED', chunks: res.chunks, transcript: plainText });
-          resolve(plainText);
-        }
-      );
+        );
+      } catch (e) {
+        reject(new Error('Extension context unavailable. Try reloading the page.'));
+      }
     });
   }
 
@@ -204,6 +222,23 @@ export function DetectionScreen({ state, dispatch }) {
     } catch (err) {
       dispatch({ type: 'SET_ERROR', error: err.message });
     } finally {
+      setBusyOp(null);
+    }
+  }
+
+  // Exec Summary
+  async function handleExecSummary() {
+    setBusyOp('exec_summary');
+    dispatch({ type: 'CLEAR_ERROR' });
+    try {
+      const transcript = await ensureTranscript();
+      dispatch({ type: 'EXEC_SUMMARY_LOADING' });
+      dispatch({ type: 'SET_SCREEN', screen: SCREENS.EXEC_SUMMARY });
+      generateExecSummary(transcript, state.meetingId, state.settings?.claudeApiKey)
+        .then(result => dispatch({ type: 'EXEC_SUMMARY_LOADED', execSummary: result }))
+        .catch(() => dispatch({ type: 'EXEC_SUMMARY_FAILED' }));
+    } catch (err) {
+      dispatch({ type: 'SET_ERROR', error: err.message });
       setBusyOp(null);
     }
   }
@@ -346,20 +381,38 @@ export function DetectionScreen({ state, dispatch }) {
 
             <div style={{ height: 1, background: '#E4E9F0', marginBottom: 16 }} />
 
-            {/* Quick Actions */}
+            {/* Chat with Call — standalone */}
+            <div style={{ marginBottom: 16 }}>
+              <QuickActionRow
+                icon={MessageCircle}
+                title="Chat with Call"
+                disabled={isBusy}
+                loading={busyOp === 'chat'}
+                onClick={handleChat}
+              />
+            </div>
+
+            {/* Insights section */}
             <div style={{
               fontSize: 10, fontWeight: 700, textTransform: 'uppercase',
               letterSpacing: '0.08em', color: '#8A97A8', marginBottom: 8,
             }}>
-              Actions
+              Insights
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }} className="anim-stagger">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }} className="anim-stagger">
               <QuickActionRow
                 icon={FileText}
                 title="View Transcript"
                 disabled={isBusy || !transcriptLoaded}
                 loading={busyOp === 'transcribe'}
                 onClick={handleTranscribe}
+              />
+              <QuickActionRow
+                icon={BookOpen}
+                title="Exec Summary"
+                disabled={isBusy}
+                loading={busyOp === 'exec_summary'}
+                onClick={handleExecSummary}
               />
               <QuickActionRow
                 icon={BarChart2}
@@ -369,25 +422,11 @@ export function DetectionScreen({ state, dispatch }) {
                 onClick={handleInsights}
               />
               <QuickActionRow
-                icon={ListChecks}
-                title="AI Powered Actionables"
-                disabled={isBusy}
-                loading={busyOp === 'actionables'}
-                onClick={handleActionables}
-              />
-              <QuickActionRow
                 icon={ClipboardList}
                 title="Meeting Minutes"
                 disabled={isBusy}
                 loading={busyOp === 'mom'}
                 onClick={handleMOM}
-              />
-              <QuickActionRow
-                icon={MessageCircle}
-                title="Chat with Call"
-                disabled={isBusy}
-                loading={busyOp === 'chat'}
-                onClick={handleChat}
               />
               <QuickActionRow
                 icon={Target}
@@ -396,6 +435,78 @@ export function DetectionScreen({ state, dispatch }) {
                 loading={busyOp === 'demo_scope'}
                 onClick={handleDemoScope}
               />
+            </div>
+
+            {/* Actions section */}
+            <div style={{
+              fontSize: 10, fontWeight: 700, textTransform: 'uppercase',
+              letterSpacing: '0.08em', color: '#8A97A8', marginBottom: 8,
+            }}>
+              Actions
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <QuickActionRow
+                icon={ListChecks}
+                title="AI Powered Actionables"
+                disabled={isBusy}
+                loading={busyOp === 'actionables'}
+                onClick={handleActionables}
+              />
+              {state.transcript && (
+                <div style={{ position: 'relative' }} ref={reportDlRef}>
+                  <div
+                    onClick={() => !isBusy && setReportDlOpen(v => !v)}
+                    style={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                      padding: '12px 14px',
+                      border: `1px solid ${reportDlOpen ? '#C8D2DE' : '#E4E9F0'}`,
+                      borderRadius: 8,
+                      background: reportDlOpen ? '#FAFBFD' : '#fff',
+                      cursor: isBusy ? 'default' : 'pointer',
+                      opacity: isBusy ? 0.4 : 1,
+                      transition: 'background 130ms, border-color 130ms',
+                      userSelect: 'none',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <PackageOpen size={13} style={{ color: ORANGE, flexShrink: 0 }} strokeWidth={2.5} />
+                      <span style={{ fontSize: 11, fontWeight: 700, color: NAVY, textTransform: 'uppercase', letterSpacing: '0.06em', whiteSpace: 'nowrap' }}>
+                        Export Full Report
+                      </span>
+                    </div>
+                    <ArrowRight size={13} style={{ color: '#A8B4C0', flexShrink: 0 }} strokeWidth={2} />
+                  </div>
+                  {reportDlOpen && (
+                    <div style={{
+                      position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0, zIndex: 50,
+                      background: '#fff', borderRadius: 8, border: '1px solid #E4E9F0',
+                      boxShadow: '0 6px 20px rgba(13,23,38,0.10)', overflow: 'hidden',
+                    }}>
+                      {[
+                        { fmt: 'md',  label: 'Markdown',         ext: '.md'  },
+                        { fmt: 'doc', label: 'Word / Google Docs', ext: '.doc' },
+                        { fmt: 'txt', label: 'Plain Text',        ext: '.txt' },
+                      ].map(({ fmt, label, ext }) => (
+                        <button key={fmt} type="button"
+                          onClick={() => { downloadFullReport(state, fmt); setReportDlOpen(false); }}
+                          style={{
+                            width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                            padding: '10px 14px', background: 'none', border: 'none', cursor: 'pointer',
+                            borderBottom: fmt !== 'txt' ? '1px solid #F5F7FA' : 'none',
+                            fontSize: 12, fontFamily: 'var(--font-sans)', fontWeight: 600,
+                            color: NAVY, textAlign: 'left', gap: 12,
+                          }}
+                          onMouseEnter={(e) => (e.currentTarget.style.background = '#F5F7FA')}
+                          onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
+                        >
+                          <span>{label}</span>
+                          <span style={{ fontSize: 10, color: '#A8B4C0', fontWeight: 500 }}>{ext}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {state.error && (

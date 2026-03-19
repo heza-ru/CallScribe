@@ -108,12 +108,11 @@ export function insightsToMarkdown(insights, meetingId) {
   lines.push('');
 
   const order = ['critical', 'high', 'medium', 'low'];
-  const emojis = { critical: '🔴', high: '🟠', medium: '🟡', low: '⚪' };
 
   order.forEach(p => {
     const group = byPriority[p];
     if (!group?.length) return;
-    lines.push(`## ${emojis[p]} ${capitalize(p)} (${group.length})`);
+    lines.push(`## ${capitalize(p)} (${group.length})`);
     lines.push('');
     group.forEach(i => {
       lines.push(insightBlock(i));
@@ -205,6 +204,7 @@ const MIME = {
 
 export function downloadAllInsights(insights, meetingId, format) {
   const mid = (meetingId || 'callscribe').slice(-8);
+  if (format === 'doc') { triggerDownload(insightsToWordDoc(insights, meetingId), `product-gaps-${mid}.doc`, 'application/msword'); return; }
   let content, ext;
   switch (format) {
     case 'json': content = insightsToJSON(insights, meetingId);     ext = 'json'; break;
@@ -265,7 +265,7 @@ export function intelligenceToMarkdown(ci, meetingId) {
   }
   if (ci.frameworkCoverage?.length) {
     lines.push(`## Framework Coverage · ${ci.framework}`);
-    ci.frameworkCoverage.forEach(d => lines.push(`- ${d.covered ? '✅' : '❌'} ${d.dimension}`));
+    ci.frameworkCoverage.forEach(d => lines.push(`- [${d.covered ? 'YES' : 'NO'}] ${d.dimension}`));
     lines.push('');
   }
   if (ci.sentimentDrivers?.positive?.length) {
@@ -325,6 +325,7 @@ export function intelligenceToTXT(ci, meetingId) {
 
 export function downloadIntelligence(ci, meetingId, format) {
   const mid = (meetingId || 'callscribe').slice(-8);
+  if (format === 'doc') { triggerDownload(intelligenceToWordDoc(ci, meetingId), `call-intelligence-${mid}.doc`, 'application/msword'); return; }
   let content, ext;
   switch (format) {
     case 'json': content = intelligenceToJSON(ci, meetingId);     ext = 'json'; break;
@@ -375,6 +376,7 @@ export function competitorsToTXT(data, meetingId) {
 
 export function downloadCompetitors(data, meetingId, format) {
   const mid = (meetingId || 'callscribe').slice(-8);
+  if (format === 'doc') { triggerDownload(competitorsToWordDoc(data, meetingId), `competitors-${mid}.doc`, 'application/msword'); return; }
   let content, ext;
   switch (format) {
     case 'json': content = competitorsToJSON(data, meetingId);     ext = 'json'; break;
@@ -391,7 +393,7 @@ export function downloadCompetitors(data, meetingId, format) {
 export function objectionsToMarkdown(data, meetingId) {
   const lines = ['# Objection Tracker', `**Meeting ID:** \`${meetingId || 'Unknown'}\``, `**Exported:** ${ts()}`, ''];
   lines.push(`**Total:** ${data.totalCount} · **Handled:** ${data.handledCount} · **Open:** ${data.totalCount - data.handledCount}`, '');
-  if (data.topRisk) { lines.push(`> ⚠️ **Top Risk:** ${data.topRisk}`, ''); }
+  if (data.topRisk) { lines.push(`> **Top Risk:** ${data.topRisk}`, ''); }
   if (!data.objections?.length) { lines.push('No objections detected.'); return lines.join('\n'); }
   data.objections.forEach((obj, i) => {
     const status = obj.handled ? '✅ Handled' : '❌ Open';
@@ -432,6 +434,7 @@ export function objectionsToTXT(data, meetingId) {
 
 export function downloadObjections(data, meetingId, format) {
   const mid = (meetingId || 'callscribe').slice(-8);
+  if (format === 'doc') { triggerDownload(objectionsToWordDoc(data, meetingId), `objections-${mid}.doc`, 'application/msword'); return; }
   let content, ext;
   switch (format) {
     case 'json': content = objectionsToJSON(data, meetingId);  ext = 'json'; break;
@@ -484,7 +487,7 @@ export function chatToMarkdown(messages, meetingId) {
   const lines = ['# Chat History', `**Meeting ID:** \`${meetingId || 'Unknown'}\``, `**Exported:** ${ts()}`, '', '---', ''];
   messages.forEach(m => {
     if (m.error || m.pending) return;
-    lines.push(`**${m.role === 'user' ? '👤 You' : '✨ Claude'}**`, '', m.content, '', '---', '');
+    lines.push(`**${m.role === 'user' ? 'You' : 'Claude'}**`, '', m.content, '', '---', '');
   });
   return lines.join('\n');
 }
@@ -515,4 +518,528 @@ export function downloadChat(messages, meetingId, format) {
     default:     content = chatToTXT(messages, meetingId);      ext = 'txt';  break;
   }
   triggerDownload(content, `chat-${mid}.${ext}`, MIME[ext] || 'text/plain');
+}
+
+// ═════════════════════════════════════════════════════════════════
+// Word-compatible HTML (.doc) helpers
+// ═════════════════════════════════════════════════════════════════
+
+function escapeHTML(text) {
+  if (!text) return '';
+  return String(text)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function wrapWordHTML(title, bodyHtml, meetingId) {
+  return `<!DOCTYPE html>
+<html xmlns:o="urn:schemas-microsoft-com:office:office"
+      xmlns:w="urn:schemas-microsoft-com:office:word"
+      xmlns="http://www.w3.org/TR/REC-html40">
+<head>
+<meta charset="utf-8">
+<title>${escapeHTML(title)}</title>
+<!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View></w:WordDocument></xml><![endif]-->
+<style>
+  body { font-family: Calibri, Arial, sans-serif; font-size: 11pt; color: #333; margin: 2cm; }
+  h1 { font-size: 18pt; color: #0D1726; border-bottom: 2px solid #E55014; padding-bottom: 6pt; }
+  h2 { font-size: 14pt; color: #E55014; margin-top: 18pt; }
+  h3 { font-size: 12pt; color: #0D1726; margin-top: 12pt; }
+  .meta { color: #888; font-size: 9pt; margin-bottom: 12pt; }
+  .badge { background: #E55014; color: white; padding: 1pt 5pt; border-radius: 2pt; font-size: 8pt; }
+  .badge-navy { background: #0D1726; color: white; padding: 1pt 5pt; border-radius: 2pt; font-size: 8pt; }
+  .badge-green { background: #16a34a; color: white; padding: 1pt 5pt; border-radius: 2pt; font-size: 8pt; }
+  .badge-amber { background: #d97706; color: white; padding: 1pt 5pt; border-radius: 2pt; font-size: 8pt; }
+  .badge-gray  { background: #6b7280; color: white; padding: 1pt 5pt; border-radius: 2pt; font-size: 8pt; }
+  p { margin: 4pt 0; line-height: 1.5; }
+  ul, ol { margin: 6pt 0 6pt 18pt; }
+  li { margin: 3pt 0; }
+  hr { border: none; border-top: 1px solid #E4E9F0; margin: 12pt 0; }
+  table { border-collapse: collapse; width: 100%; margin: 8pt 0; }
+  th { background: #F5F7FA; border: 1px solid #E4E9F0; padding: 5pt 8pt; text-align: left; font-size: 9pt; text-transform: uppercase; }
+  td { border: 1px solid #E4E9F0; padding: 5pt 8pt; vertical-align: top; }
+  blockquote { border-left: 3px solid #E55014; margin: 8pt 0 8pt 12pt; padding-left: 8pt; color: #666; font-style: italic; }
+</style>
+</head>
+<body>
+<h1>${escapeHTML(title)}</h1>
+<p class="meta">Meeting ID: ${escapeHTML(meetingId || 'Unknown')} &nbsp;·&nbsp; Exported: ${ts()}</p>
+<hr>
+${bodyHtml}
+</body>
+</html>`;
+}
+
+function prioClass(p) {
+  const m = { critical: 'badge', high: 'badge', medium: 'badge-amber', low: 'badge-gray' };
+  return m[(p || 'medium').toLowerCase()] || 'badge-amber';
+}
+
+export function insightsToWordDoc(insights, meetingId) {
+  const sorted = sortInsights(insights);
+  const body = sorted.map(i => `
+<h3>${escapeHTML(i.title)}</h3>
+<p><span class="${prioClass(i.priority)}">${capitalize(i.priority)}</span>
+&nbsp; <span class="badge-navy">${capitalize(i.type)}</span>
+&nbsp; <strong>Area:</strong> ${escapeHTML(i.productArea || '—')}</p>
+<p>${escapeHTML(i.description || '')}</p>
+<hr>`).join('\n');
+  return wrapWordHTML('Product Gaps Report', body, meetingId);
+}
+
+export function intelligenceToWordDoc(ci, meetingId) {
+  let body = `
+<h2>Overview</h2>
+<table>
+  <tr><th>Metric</th><th>Value</th></tr>
+  <tr><td>Call Type</td><td>${escapeHTML(ci.callType || '—')}</td></tr>
+  <tr><td>Framework</td><td>${escapeHTML(ci.framework || '—')}</td></tr>
+  <tr><td>Effectiveness</td><td>${ci.effectiveness}/10</td></tr>
+  <tr><td>Sentiment</td><td>${escapeHTML(ci.customerSentiment?.label || '—')} (${ci.customerSentiment?.score}/10)</td></tr>
+  <tr><td>Sentiment Split</td><td>+${ci.customerSentiment?.positive}% Positive · ${ci.customerSentiment?.neutral}% Neutral · ${ci.customerSentiment?.negative}% Negative</td></tr>
+  <tr><td>Q&amp;A Coverage</td><td>${ci.questionsAnsweredPct}%</td></tr>
+</table>`;
+  if (ci.callSummary) body += `<h2>Summary</h2><p>${escapeHTML(ci.callSummary)}</p>`;
+  if (ci.keyThemes?.length) body += `<h2>Key Themes</h2><ul>${ci.keyThemes.map(t => `<li>${escapeHTML(t)}</li>`).join('')}</ul>`;
+  if (ci.strengths?.length) body += `<h2>Strengths</h2><ul>${ci.strengths.map(s => `<li>${escapeHTML(s)}</li>`).join('')}</ul>`;
+  if (ci.improvements?.length) body += `<h2>Areas to Improve</h2><ul>${ci.improvements.map(s => `<li>${escapeHTML(s)}</li>`).join('')}</ul>`;
+  if (ci.nextSteps?.length) body += `<h2>Next Steps</h2><ol>${ci.nextSteps.map(s => `<li>${escapeHTML(s)}</li>`).join('')}</ol>`;
+  if (ci.frameworkCoverage?.length) {
+    body += `<h2>Framework Coverage · ${escapeHTML(ci.framework)}</h2><table><tr><th>Dimension</th><th>Status</th></tr>`;
+    ci.frameworkCoverage.forEach(d => { body += `<tr><td>${escapeHTML(d.dimension)}</td><td>${d.covered ? 'Covered' : 'Not covered'}</td></tr>`; });
+    body += '</table>';
+  }
+  return wrapWordHTML('Call Intelligence Report', body, meetingId);
+}
+
+export function objectionsToWordDoc(data, meetingId) {
+  const sevClass = { blocking: 'badge', moderate: 'badge-amber', minor: 'badge-gray' };
+  let body = `
+<h2>Summary</h2>
+<table>
+  <tr><th>Total</th><th>Handled</th><th>Open</th></tr>
+  <tr><td>${data.totalCount}</td><td>${data.handledCount}</td><td>${data.totalCount - data.handledCount}</td></tr>
+</table>`;
+  if (data.topRisk) body += `<p><strong>Top Risk:</strong> ${escapeHTML(data.topRisk)}</p>`;
+  (data.objections || []).forEach((obj, i) => {
+    const sc = sevClass[obj.severity] || 'badge-gray';
+    body += `<h3>${i + 1}. ${escapeHTML(obj.summary)}</h3>
+<p><span class="${sc}">${capitalize(obj.severity)}</span> &nbsp;
+<span class="badge-navy">${escapeHTML(obj.category)}</span> &nbsp;
+<span class="${obj.handled ? 'badge-green' : 'badge-gray'}">${obj.handled ? '✓ Handled' : 'Open'}</span></p>`;
+    if (obj.quote) body += `<blockquote>"${escapeHTML(obj.quote)}"</blockquote>`;
+    if (obj.repResponse) body += `<p><strong>Rep response:</strong> ${escapeHTML(obj.repResponse)}</p>`;
+    body += '<hr>';
+  });
+  return wrapWordHTML('Objection Tracker', body, meetingId);
+}
+
+export function competitorsToWordDoc(data, meetingId) {
+  let body = '';
+  if (data.summary) body += `<p>${escapeHTML(data.summary)}</p><hr>`;
+  (data.competitors || []).forEach((c, i) => {
+    const sClass = { positive: 'badge-green', negative: 'badge', neutral: 'badge-gray' };
+    body += `<h3>${i + 1}. ${escapeHTML(c.name)}</h3>
+<p><span class="badge-navy">${escapeHTML(c.category)}</span> &nbsp;
+<span class="${sClass[c.sentiment] || 'badge-gray'}">${capitalize(c.sentiment)}</span> &nbsp;
+×${c.mentions} mention${c.mentions !== 1 ? 's' : ''}</p>`;
+    if (c.context) body += `<p>${escapeHTML(c.context)}</p>`;
+    if (c.quotes?.length) { body += '<ul>'; c.quotes.forEach(q => { body += `<li><em>"${escapeHTML(q)}"</em></li>`; }); body += '</ul>'; }
+    body += '<hr>';
+  });
+  return wrapWordHTML('Competitor Analysis', body, meetingId);
+}
+
+export function momToWordDoc(mom, meetingId) {
+  // mom.internal and mom.external are Markdown strings — convert basic MD to HTML
+  function mdToHTML(md) {
+    if (!md) return '';
+    return md
+      .replace(/^# (.+)$/gm, '<h2>$1</h2>')
+      .replace(/^## (.+)$/gm, '<h3>$1</h3>')
+      .replace(/^### (.+)$/gm, '<h4>$1</h4>')
+      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+      .replace(/\*(.+?)\*/g, '<em>$1</em>')
+      .replace(/^[-*] (.+)$/gm, '<li>$1</li>')
+      .replace(/(<li>.*<\/li>\n?)+/g, m => `<ul>${m}</ul>`)
+      .replace(/^---$/gm, '<hr>')
+      .replace(/\n\n/g, '</p><p>')
+      .replace(/^(?!<[hup]|<li|<hr)(.+)$/gm, '$1<br>');
+  }
+  let body = '';
+  if (mom.internal) body += `<h2>Internal — Team Use Only</h2>${mdToHTML(mom.internal)}<hr>`;
+  if (mom.external) body += `<h2>External — Client Facing</h2>${mdToHTML(mom.external)}`;
+  return wrapWordHTML('Meeting Minutes', body, meetingId);
+}
+
+// ═════════════════════════════════════════════════════════════════
+// Updated download functions with doc format support
+// ═════════════════════════════════════════════════════════════════
+
+export function downloadInsightsDoc(insights, meetingId) {
+  const mid = (meetingId || 'callscribe').slice(-8);
+  triggerDownload(insightsToWordDoc(insights, meetingId), `product-gaps-${mid}.doc`, 'application/msword');
+}
+
+export function downloadIntelligenceDoc(ci, meetingId) {
+  const mid = (meetingId || 'callscribe').slice(-8);
+  triggerDownload(intelligenceToWordDoc(ci, meetingId), `call-intelligence-${mid}.doc`, 'application/msword');
+}
+
+export function downloadObjectionsDoc(data, meetingId) {
+  const mid = (meetingId || 'callscribe').slice(-8);
+  triggerDownload(objectionsToWordDoc(data, meetingId), `objections-${mid}.doc`, 'application/msword');
+}
+
+export function downloadCompetitorsDoc(data, meetingId) {
+  const mid = (meetingId || 'callscribe').slice(-8);
+  triggerDownload(competitorsToWordDoc(data, meetingId), `competitors-${mid}.doc`, 'application/msword');
+}
+
+export function downloadMOMDoc(mom, meetingId) {
+  const mid = (meetingId || 'callscribe').slice(-8);
+  triggerDownload(momToWordDoc(mom, meetingId), `meeting-minutes-${mid}.doc`, 'application/msword');
+}
+
+// ═════════════════════════════════════════════════════════════════
+// Executive Summary formatter
+// ═════════════════════════════════════════════════════════════════
+
+const EXEC_SCORE_LABELS = { 1: 'Poor', 2: 'Weak', 3: 'Moderate', 4: 'Good', 5: 'Excellent' };
+const EXEC_SCORE_KEYS = {
+  storytellingFlow:       'Storytelling & Flow',
+  useCaseAlignment:       'Use Case Alignment',
+  featureValueMapping:    'Feature-to-Value Mapping',
+  differentiationClarity: 'Differentiation Clarity',
+  objectionHandling:      'Objection Handling',
+  overallEffectiveness:   'Overall Effectiveness',
+};
+const EXEC_SECTION_KEYS = [
+  { key: 'storyline',           title: '1. Demo Storyline & Flow' },
+  { key: 'useCases',            title: '2. Use Cases & Product Positioning' },
+  { key: 'featureDemoQuality',  title: '3. Feature Demonstration Quality' },
+  { key: 'differentiation',     title: '4. Whatfix Differentiation Analysis' },
+  { key: 'questionsObjections', title: '5. Customer Questions, Objections & Responses' },
+  { key: 'infosec',             title: '6. InfoSec / Deployment Deep Dive' },
+  { key: 'gaps',                title: '7. Gaps & Missed Opportunities' },
+  { key: 'improvements',        title: '8. Opportunities & Improvements' },
+];
+
+function execMdToHTML(md) {
+  if (!md) return '';
+  return md
+    .replace(/^### (.+)$/gm, '<h4>$1</h4>')
+    .replace(/^## (.+)$/gm, '<h3>$1</h3>')
+    .replace(/^# (.+)$/gm, '<h2>$1</h2>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+    .replace(/^[-*] (.+)$/gm, '<li>$1</li>')
+    .replace(/(<li>.*<\/li>(\n|$))+/g, m => `<ul>${m}</ul>`)
+    .replace(/^---$/gm, '<hr>')
+    .replace(/\n\n/g, '</p><p>');
+}
+
+export function execSummaryToMarkdown(data, meetingId) {
+  const lines = [
+    '# Executive Demo Analysis',
+    `**Meeting ID:** \`${meetingId || 'Unknown'}\``,
+    `**Exported:** ${ts()}`,
+    '',
+    '---',
+    '',
+    '## Demo Effectiveness Scores',
+    '',
+  ];
+  Object.entries(EXEC_SCORE_KEYS).forEach(([key, label]) => {
+    const s = data.scores?.[key];
+    if (s) lines.push(`- **${label}:** ${s.score}/5 (${EXEC_SCORE_LABELS[s.score] || ''}) — ${s.rationale}`);
+  });
+  lines.push('');
+  if (data.executiveSummary?.length) {
+    lines.push('## Executive Summary', '');
+    data.executiveSummary.forEach(b => lines.push(`- ${b}`));
+    lines.push('');
+  }
+  EXEC_SECTION_KEYS.forEach(({ key, title }) => {
+    if (data[key]) {
+      lines.push(`## ${title}`, '', data[key], '', '---', '');
+    }
+  });
+  if (data.followUpActions?.length) {
+    lines.push('## Follow-up Actions', '');
+    data.followUpActions.forEach((a, i) => lines.push(`${i + 1}. ${a}`));
+    lines.push('');
+  }
+  return lines.join('\n');
+}
+
+export function execSummaryToWordDoc(data, meetingId) {
+  const scoreColors = { 1: '#dc2626', 2: '#f97316', 3: '#d97706', 4: '#16a34a', 5: '#15803d' };
+
+  // Scores table
+  let body = '<h2>Demo Effectiveness Scores</h2>';
+  body += '<table><tr><th>Dimension</th><th>Score</th><th>Rating</th><th>Rationale</th></tr>';
+  Object.entries(EXEC_SCORE_KEYS).forEach(([key, label]) => {
+    const s = data.scores?.[key];
+    if (!s) return;
+    const col = scoreColors[s.score] || '#6b7280';
+    body += `<tr>
+      <td><strong>${escapeHTML(label)}</strong></td>
+      <td style="text-align:center;font-size:18pt;font-weight:bold;color:${col}">${s.score}</td>
+      <td><span style="color:${col};font-weight:bold">${EXEC_SCORE_LABELS[s.score] || ''}</span></td>
+      <td>${escapeHTML(s.rationale || '')}</td>
+    </tr>`;
+  });
+  body += '</table>';
+
+  // Executive Summary
+  if (data.executiveSummary?.length) {
+    body += '<h2>Executive Summary</h2><ul>';
+    data.executiveSummary.forEach(b => { body += `<li>${escapeHTML(b)}</li>`; });
+    body += '</ul><hr>';
+  }
+
+  // Follow-up Actions
+  if (data.followUpActions?.length) {
+    body += '<h2>Follow-up Actions</h2><ol>';
+    data.followUpActions.forEach(a => { body += `<li>${escapeHTML(a)}</li>`; });
+    body += '</ol><hr>';
+  }
+
+  // Detailed sections
+  EXEC_SECTION_KEYS.forEach(({ key, title }) => {
+    if (data[key]) {
+      body += `<h2>${escapeHTML(title)}</h2>`;
+      body += execMdToHTML(data[key]);
+      body += '<hr>';
+    }
+  });
+
+  return wrapWordHTML('Executive Demo Analysis', body, meetingId);
+}
+
+export function downloadExecSummary(data, meetingId, format) {
+  const mid = (meetingId || 'callscribe').slice(-8);
+  if (format === 'doc') {
+    triggerDownload(execSummaryToWordDoc(data, meetingId), `exec-summary-${mid}.doc`, 'application/msword');
+    return;
+  }
+  const md = execSummaryToMarkdown(data, meetingId);
+  if (format === 'txt') {
+    const plain = md
+      .replace(/^#{1,6}\s+/gm, '')
+      .replace(/\*\*(.*?)\*\*/g, '$1')
+      .replace(/\*(.*?)\*/g, '$1')
+      .replace(/`(.*?)`/g, '$1')
+      .replace(/^[-*]\s/gm, '  · ')
+      .replace(/^\d+\.\s/gm, m => `  ${m}`)
+      .replace(/^---$/gm, '─'.repeat(50));
+    triggerDownload(plain, `exec-summary-${mid}.txt`, 'text/plain');
+  } else {
+    triggerDownload(md, `exec-summary-${mid}.md`, 'text/markdown');
+  }
+}
+
+// ═════════════════════════════════════════════════════════════════
+// Collective "Full Report" download
+// ═════════════════════════════════════════════════════════════════
+
+export function downloadFullReport(state, format) {
+  const { insights, callIntelligence: ci, competitors, objections, mom, demoScope, chatMessages: messages, meetingId } = state;
+  const mid = (meetingId || 'callscribe').slice(-8);
+
+  if (format === 'doc') {
+    let body = '';
+
+    // ── 1. Call Intelligence ──────────────────────────────────────
+    if (ci && ci !== 'loading') {
+      body += `<h2>Call Intelligence</h2>`;
+      body += `<table>
+  <tr><th>Metric</th><th>Value</th></tr>
+  <tr><td>Call Type</td><td>${escapeHTML(ci.callType || '—')}</td></tr>
+  <tr><td>Framework</td><td>${escapeHTML(ci.framework || '—')}</td></tr>
+  <tr><td>Effectiveness</td><td>${ci.effectiveness}/10</td></tr>
+  <tr><td>Questions Answered</td><td>${ci.questionsAnsweredPct}%</td></tr>
+  <tr><td>Talk Ratio (Rep / Customer)</td><td>${ci.talkRatio?.rep || '—'}% / ${ci.talkRatio?.customer || '—'}%</td></tr>
+  <tr><td>Interruptions</td><td>${ci.interrupts ?? '—'}</td></tr>
+  <tr><td>Sentiment</td><td>${escapeHTML(ci.customerSentiment?.label || '—')} (score ${ci.customerSentiment?.score}/10)</td></tr>
+  <tr><td>Sentiment Split</td><td>Positive ${ci.customerSentiment?.positive}% · Neutral ${ci.customerSentiment?.neutral}% · Negative ${ci.customerSentiment?.negative}%</td></tr>
+</table>`;
+      if (ci.callSummary) body += `<h3>Summary</h3><p>${escapeHTML(ci.callSummary)}</p>`;
+      if (ci.keyThemes?.length) {
+        body += `<h3>Key Themes</h3><ul>${ci.keyThemes.map(t => `<li>${escapeHTML(t)}</li>`).join('')}</ul>`;
+      }
+      if (ci.frameworkCoverage?.length) {
+        body += `<h3>Framework Coverage — ${escapeHTML(ci.framework)}</h3><table><tr><th>Dimension</th><th>Covered</th></tr>`;
+        ci.frameworkCoverage.forEach(d => { body += `<tr><td>${escapeHTML(d.dimension)}</td><td>${d.covered ? 'Yes' : 'No'}</td></tr>`; });
+        body += '</table>';
+      }
+      if (ci.sentimentDrivers?.positive?.length) {
+        body += `<h3>Positive Sentiment Drivers</h3><ul>${ci.sentimentDrivers.positive.map(d => `<li>${escapeHTML(d)}</li>`).join('')}</ul>`;
+      }
+      if (ci.sentimentDrivers?.negative?.length) {
+        body += `<h3>Negative Sentiment Drivers</h3><ul>${ci.sentimentDrivers.negative.map(d => `<li>${escapeHTML(d)}</li>`).join('')}</ul>`;
+      }
+      if (ci.strengths?.length) {
+        body += `<h3>Strengths</h3><ul>${ci.strengths.map(s => `<li>${escapeHTML(s)}</li>`).join('')}</ul>`;
+      }
+      if (ci.improvements?.length) {
+        body += `<h3>Areas to Improve</h3><ul>${ci.improvements.map(s => `<li>${escapeHTML(s)}</li>`).join('')}</ul>`;
+      }
+      if (ci.nextSteps?.length) {
+        body += `<h3>Recommended Next Steps</h3><ol>${ci.nextSteps.map(s => `<li>${escapeHTML(s)}</li>`).join('')}</ol>`;
+      }
+      body += '<hr>';
+    }
+
+    // ── 2. Product Gaps ───────────────────────────────────────────
+    if (insights?.length > 0) {
+      const sorted = sortInsights(insights);
+      body += `<h2>Product Gaps (${insights.length})</h2>`;
+      sorted.forEach(i => {
+        body += `<h3>${escapeHTML(i.title)}</h3>`;
+        body += `<p><span class="${prioClass(i.priority)}">${capitalize(i.priority)}</span> &nbsp; <span class="badge-navy">${capitalize(i.type)}</span> &nbsp; <strong>Product Area:</strong> ${escapeHTML(i.productArea || '—')}</p>`;
+        if (i.description) body += `<p>${escapeHTML(i.description)}</p>`;
+        body += '<hr>';
+      });
+    }
+
+    // ── 3. Competitor Analysis ────────────────────────────────────
+    if (competitors && competitors !== 'loading' && competitors.competitors?.length > 0) {
+      body += `<h2>Competitor Analysis (${competitors.competitors.length})</h2>`;
+      if (competitors.summary) body += `<p>${escapeHTML(competitors.summary)}</p>`;
+      competitors.competitors.forEach((c, i) => {
+        const sClass = { positive: 'badge-green', negative: 'badge', neutral: 'badge-gray' };
+        body += `<h3>${i + 1}. ${escapeHTML(c.name)}</h3>`;
+        body += `<p><span class="badge-navy">${escapeHTML(c.category)}</span> &nbsp; <span class="${sClass[c.sentiment] || 'badge-gray'}">${capitalize(c.sentiment)}</span> &nbsp; ${c.mentions} mention${c.mentions !== 1 ? 's' : ''}</p>`;
+        if (c.context) body += `<p>${escapeHTML(c.context)}</p>`;
+        if (c.quotes?.length) { body += '<ul>'; c.quotes.forEach(q => { body += `<li><em>"${escapeHTML(q)}"</em></li>`; }); body += '</ul>'; }
+        body += '<hr>';
+      });
+    }
+
+    // ── 4. Objection Tracker ──────────────────────────────────────
+    if (objections && objections !== 'loading' && objections.objections?.length > 0) {
+      const sevClass = { blocking: 'badge', moderate: 'badge-amber', minor: 'badge-gray' };
+      body += `<h2>Objection Tracker</h2>`;
+      body += `<table><tr><th>Total</th><th>Handled</th><th>Open</th></tr>`;
+      body += `<tr><td>${objections.totalCount}</td><td>${objections.handledCount}</td><td>${objections.totalCount - objections.handledCount}</td></tr></table>`;
+      if (objections.topRisk) body += `<p><strong>Top Unresolved Risk:</strong> ${escapeHTML(objections.topRisk)}</p>`;
+      objections.objections.forEach((obj, i) => {
+        body += `<h3>${i + 1}. ${escapeHTML(obj.summary)}</h3>`;
+        body += `<p><span class="${sevClass[obj.severity] || 'badge-gray'}">${capitalize(obj.severity)}</span> &nbsp; <span class="badge-navy">${escapeHTML(obj.category)}</span> &nbsp; <span class="${obj.handled ? 'badge-green' : 'badge-gray'}">${obj.handled ? 'Handled' : 'Open'}</span></p>`;
+        if (obj.quote) body += `<blockquote>"${escapeHTML(obj.quote)}"</blockquote>`;
+        if (obj.repResponse) body += `<p><strong>Rep response:</strong> ${escapeHTML(obj.repResponse)}</p>`;
+        body += '<hr>';
+      });
+    }
+
+    // ── 5. Meeting Minutes ────────────────────────────────────────
+    if (mom && mom !== 'loading' && (mom.internal || mom.external)) {
+      function mdToHTML(md) {
+        if (!md) return '';
+        return md
+          .replace(/^#{1,6}\s+(.+)$/gm, (_, t) => `<p><strong>${escapeHTML(t)}</strong></p>`)
+          .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+          .replace(/\*(.+?)\*/g, '<em>$1</em>')
+          .replace(/^[-*] (.+)$/gm, '<li>$1</li>')
+          .replace(/(<li>.*<\/li>\n?)+/g, m => `<ul>${m}</ul>`)
+          .replace(/^---$/gm, '<hr>')
+          .replace(/\n\n/g, '</p><p>')
+          .replace(/^(?!<[huplb]|<hr)(.+)$/gm, '$1<br>');
+      }
+      body += `<h2>Meeting Minutes</h2>`;
+      if (mom.internal) body += `<h3>Internal — Team Use Only</h3>${mdToHTML(mom.internal)}`;
+      if (mom.external) body += `<h3>External — Client Facing</h3>${mdToHTML(mom.external)}`;
+      body += '<hr>';
+    }
+
+    // ── 6. Demo Scope ─────────────────────────────────────────────
+    if (demoScope && demoScope !== 'loading') {
+      body += `<h2>Demo Scope Advisor</h2>`;
+      body += `<table>
+  <tr><th>Field</th><th>Value</th></tr>
+  <tr><td>Call Stage</td><td>${escapeHTML(capitalize(demoScope.callStage))}</td></tr>
+  <tr><td>Client Platform</td><td>${escapeHTML(capitalize(demoScope.clientPlatform))}</td></tr>`;
+      if (demoScope.prospect?.name) body += `<tr><td>Prospect</td><td>${escapeHTML(demoScope.prospect.name)}</td></tr>`;
+      if (demoScope.prospect?.industry) body += `<tr><td>Industry</td><td>${escapeHTML(demoScope.prospect.industry)}</td></tr>`;
+      if (demoScope.prospect?.useCase) body += `<tr><td>Use Case</td><td>${escapeHTML(demoScope.prospect.useCase)}</td></tr>`;
+      body += `</table>`;
+      if (demoScope.pocScope?.note) body += `<p><strong>POC Scope:</strong> ${escapeHTML(demoScope.pocScope.note)}</p>`;
+      if (demoScope.summary) body += `<p>${escapeHTML(demoScope.summary)}</p>`;
+      if (demoScope.recommendations?.length) {
+        body += `<h3>Recommended Environments</h3>`;
+        demoScope.recommendations.forEach((r, i) => {
+          const env = r.env;
+          body += `<h4>${i + 1}. ${escapeHTML(env?.name || `Environment ${r.envId}`)}</h4>`;
+          body += `<p><strong>Domain:</strong> ${escapeHTML(env?.domain || '—')} &nbsp; <strong>Type:</strong> ${escapeHTML(env?.type || '—')} &nbsp; <strong>Application:</strong> ${escapeHTML(env?.application || '—')}</p>`;
+          if (r.reason) body += `<p><strong>Reason:</strong> ${escapeHTML(r.reason)}</p>`;
+          if (r.cloneNeeded) body += `<p><strong>Clone Required</strong>${r.cloneNote ? ': ' + escapeHTML(r.cloneNote) : ''}</p>`;
+        });
+      }
+      body += '<hr>';
+    }
+
+    // ── 7. Chat History ───────────────────────────────────────────
+    if (messages?.length > 0) {
+      const validMsgs = messages.filter(m => !m.error && !m.pending);
+      if (validMsgs.length > 0) {
+        body += `<h2>Chat History (${validMsgs.length} messages)</h2>`;
+        validMsgs.forEach(m => {
+          body += `<p><strong>${m.role === 'user' ? 'You' : 'Claude'}:</strong></p>`;
+          body += `<p style="margin-left:12pt;white-space:pre-wrap">${escapeHTML(m.content)}</p><hr>`;
+        });
+      }
+    }
+
+    triggerDownload(wrapWordHTML('CallScribe Full Report', body, meetingId), `callscribe-report-${mid}.doc`, 'application/msword');
+    return;
+  }
+
+  // ── Markdown / TXT formats ────────────────────────────────────
+  const parts = [];
+  if (ci && ci !== 'loading') parts.push(intelligenceToMarkdown(ci, meetingId));
+  if (insights?.length > 0) parts.push(insightsToMarkdown(insights, meetingId));
+  if (competitors && competitors !== 'loading' && competitors.competitors) parts.push(competitorsToMarkdown(competitors, meetingId));
+  if (objections && objections !== 'loading' && objections.objections) parts.push(objectionsToMarkdown(objections, meetingId));
+  if (mom && mom !== 'loading' && (mom.internal || mom.external)) {
+    const lines = ['# Meeting Minutes', `**Meeting ID:** \`${meetingId || 'Unknown'}\``, `**Exported:** ${ts()}`, ''];
+    if (mom.internal) { lines.push('## Internal — Team Use Only', '', mom.internal, ''); }
+    if (mom.external) { lines.push('## External — Client Facing', '', mom.external, ''); }
+    parts.push(lines.join('\n'));
+  }
+  if (demoScope && demoScope !== 'loading') {
+    const lines = ['# Demo Scope Advisor', `**Meeting ID:** \`${meetingId || 'Unknown'}\``, `**Exported:** ${ts()}`, ''];
+    lines.push(`**Call Stage:** ${capitalize(demoScope.callStage)}  `);
+    lines.push(`**Client Platform:** ${capitalize(demoScope.clientPlatform)}  `);
+    if (demoScope.prospect?.name) lines.push(`**Prospect:** ${demoScope.prospect.name}  `);
+    if (demoScope.prospect?.industry) lines.push(`**Industry:** ${demoScope.prospect.industry}  `);
+    if (demoScope.pocScope?.note) lines.push(`**POC Scope:** ${demoScope.pocScope.note}  `);
+    if (demoScope.summary) { lines.push('', demoScope.summary); }
+    if (demoScope.recommendations?.length) {
+      lines.push('', '## Recommended Environments', '');
+      demoScope.recommendations.forEach((r, i) => {
+        const env = r.env;
+        lines.push(`### ${i + 1}. ${env?.name || `Environment ${r.envId}`}`);
+        lines.push(`**Domain:** ${env?.domain || '—'} · **Type:** ${env?.type || '—'} · **Application:** ${env?.application || '—'}  `);
+        if (r.reason) lines.push(`**Reason:** ${r.reason}  `);
+        if (r.cloneNeeded) lines.push(`**Clone Required**${r.cloneNote ? ': ' + r.cloneNote : ''}  `);
+        lines.push('');
+      });
+    }
+    parts.push(lines.join('\n'));
+  }
+  if (messages?.length > 0) parts.push(chatToMarkdown(messages, meetingId));
+
+  if (parts.length === 0) return;
+
+  const content = parts.join('\n\n---\n\n');
+  if (format === 'txt') {
+    const plain = content.replace(/^#{1,6}\s+/gm, '').replace(/\*\*(.*?)\*\*/g, '$1').replace(/\*(.*?)\*/g, '$1').replace(/`(.*?)`/g, '$1').replace(/^[-*]\s/gm, '  · ').replace(/^\d+\.\s/gm, m => `  ${m}`).replace(/^\|.*\|$/gm, '').replace(/^---$/gm, '─'.repeat(50));
+    triggerDownload(plain, `callscribe-report-${mid}.txt`, 'text/plain');
+  } else {
+    triggerDownload(content, `callscribe-report-${mid}.md`, 'text/markdown');
+  }
 }

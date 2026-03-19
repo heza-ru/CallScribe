@@ -6,7 +6,7 @@ import {
   AlertTriangle, CheckCheck, Download,
 } from 'lucide-react';
 import { analyzeTranscript, analyzeCallIntelligence, detectCompetitors, trackObjections } from '../services/claudeService';
-import { downloadIntelligence, downloadCompetitors, downloadObjections } from '../utils/analysisFormatter';
+import { downloadIntelligence, downloadCompetitors, downloadObjections, downloadFullReport } from '../utils/analysisFormatter';
 import { SCREENS } from '../constants';
 
 const ORANGE = '#E55014';
@@ -25,15 +25,15 @@ function SectionLabel({ children }) {
   );
 }
 
-function Tab({ label, active, onClick }) {
+function Tab({ label, active, onClick, tabRef }) {
   return (
-    <button type="button" onClick={onClick}
+    <button type="button" onClick={onClick} ref={tabRef}
       style={{
-        padding: '10px 10px 9px', background: 'none', border: 'none',
-        cursor: 'pointer', fontSize: 10.5, whiteSpace: 'nowrap', flexShrink: 0,
+        padding: '10px 8px 9px', background: 'none', border: 'none',
+        cursor: 'pointer', fontSize: 10, whiteSpace: 'nowrap', flexShrink: 0,
         fontWeight: active ? 800 : 600,
         color: active ? NAVY : '#8A97A8',
-        textTransform: 'uppercase', letterSpacing: '0.07em',
+        textTransform: 'uppercase', letterSpacing: '0.06em',
         borderBottom: active ? `2px solid ${ORANGE}` : '2px solid transparent',
         transition: 'color 120ms, border-color 120ms',
         marginBottom: -1,
@@ -519,7 +519,7 @@ function CompetitorsTab({ state, dispatch }) {
               </button>
               {dlOpen && (
                 <div style={{ position: 'absolute', bottom: 'calc(100% + 4px)', right: 0, zIndex: 50, background: '#fff', borderRadius: 8, border: '1px solid #E4E9F0', boxShadow: '0 6px 20px rgba(13,23,38,0.10)', overflow: 'hidden', minWidth: 150 }}>
-                  {[{ fmt: 'md', label: 'Markdown', ext: '.md' }, { fmt: 'json', label: 'JSON', ext: '.json' }, { fmt: 'txt', label: 'Plain Text', ext: '.txt' }].map(({ fmt, label, ext }) => (
+                  {[{ fmt: 'md', label: 'Markdown', ext: '.md' }, { fmt: 'json', label: 'JSON', ext: '.json' }, { fmt: 'doc', label: 'Word (.doc)', ext: '.doc' }, { fmt: 'txt', label: 'Plain Text', ext: '.txt' }].map(({ fmt, label, ext }) => (
                     <button key={fmt} type="button"
                       onClick={() => { downloadCompetitors(data, state.meetingId, fmt); setDlOpen(false); }}
                       style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', background: 'none', border: 'none', cursor: 'pointer', borderTop: '1px solid #F5F7FA', fontSize: 11.5, fontFamily: 'var(--font-sans)', fontWeight: 600, color: NAVY, textAlign: 'left', gap: 12 }}
@@ -694,7 +694,7 @@ function ObjectionsTab({ state, dispatch }) {
               </button>
               {dlOpen && (
                 <div style={{ position: 'absolute', bottom: 'calc(100% + 4px)', right: 0, zIndex: 50, background: '#fff', borderRadius: 8, border: '1px solid #E4E9F0', boxShadow: '0 6px 20px rgba(13,23,38,0.10)', overflow: 'hidden', minWidth: 150 }}>
-                  {[{ fmt: 'md', label: 'Markdown', ext: '.md' }, { fmt: 'json', label: 'JSON', ext: '.json' }, { fmt: 'csv', label: 'CSV', ext: '.csv' }, { fmt: 'txt', label: 'Plain Text', ext: '.txt' }].map(({ fmt, label, ext }) => (
+                  {[{ fmt: 'md', label: 'Markdown', ext: '.md' }, { fmt: 'json', label: 'JSON', ext: '.json' }, { fmt: 'doc', label: 'Word (.doc)', ext: '.doc' }, { fmt: 'csv', label: 'CSV', ext: '.csv' }, { fmt: 'txt', label: 'Plain Text', ext: '.txt' }].map(({ fmt, label, ext }) => (
                     <button key={fmt} type="button"
                       onClick={() => { downloadObjections(data, state.meetingId, fmt); setDlOpen(false); }}
                       style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', background: 'none', border: 'none', cursor: 'pointer', borderTop: '1px solid #F5F7FA', fontSize: 11.5, fontFamily: 'var(--font-sans)', fontWeight: 600, color: NAVY, textAlign: 'left', gap: 12 }}
@@ -731,6 +731,8 @@ export function IntelligenceScreen({ state, dispatch }) {
   const [error,       setError]       = useState(null);
   const [dlOpen,      setDlOpen]      = useState(false);
   const dlRef = useRef(null);
+  const tabBarRef = useRef(null);
+  const activeTabBtnRef = useRef(null);
 
   useEffect(() => {
     if (!dlOpen) return;
@@ -738,6 +740,12 @@ export function IntelligenceScreen({ state, dispatch }) {
     document.addEventListener('mousedown', onDown);
     return () => document.removeEventListener('mousedown', onDown);
   }, [dlOpen]);
+
+  useEffect(() => {
+    if (activeTabBtnRef.current) {
+      activeTabBtnRef.current.scrollIntoView({ behavior: 'smooth', inline: 'nearest', block: 'nearest' });
+    }
+  }, [tab]);
 
   async function handleReanalyze() {
     setError(null);
@@ -872,7 +880,7 @@ export function IntelligenceScreen({ state, dispatch }) {
                 <div style={{ padding: '8px 12px 6px', fontSize: 9.5, fontWeight: 700, color: '#A8B4C0', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
                   Export Report
                 </div>
-                {[{ fmt: 'md', label: 'Markdown', ext: '.md' }, { fmt: 'json', label: 'JSON', ext: '.json' }, { fmt: 'txt', label: 'Plain Text', ext: '.txt' }].map(({ fmt, label, ext }) => (
+                {[{ fmt: 'md', label: 'Markdown', ext: '.md' }, { fmt: 'json', label: 'JSON', ext: '.json' }, { fmt: 'doc', label: 'Word / Google Docs', ext: '.doc' }, { fmt: 'txt', label: 'Plain Text', ext: '.txt' }].map(({ fmt, label, ext }) => (
                   <button key={fmt} type="button"
                     onClick={() => { downloadIntelligence(ci, state.meetingId, fmt); setDlOpen(false); }}
                     style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '9px 14px', background: 'none', border: 'none', cursor: 'pointer', borderTop: '1px solid #F5F7FA', fontSize: 12, fontFamily: 'var(--font-sans)', fontWeight: 600, color: NAVY, textAlign: 'left', gap: 16 }}
@@ -896,14 +904,20 @@ export function IntelligenceScreen({ state, dispatch }) {
       )}
 
       {/* Tab bar — scrollable so all tabs are reachable at any width */}
-      <div className="tab-bar-scroll" style={{
+      <div ref={tabBarRef} className="tab-bar-scroll" style={{
         display: 'flex', flexShrink: 0,
         background: '#fff', borderBottom: '1px solid #E4E9F0',
         padding: '0 8px',
         overflowX: 'auto',
       }}>
         {TABS.map(({ key, label }) => (
-          <Tab key={key} label={label} active={tab === key} onClick={() => setTab(key)} />
+          <Tab
+            key={key}
+            label={label}
+            active={tab === key}
+            onClick={() => setTab(key)}
+            tabRef={tab === key ? activeTabBtnRef : null}
+          />
         ))}
       </div>
 

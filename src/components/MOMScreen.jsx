@@ -165,40 +165,36 @@ export function MOMScreen({ state, dispatch }) {
         <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
           {hasContent && (
             <>
-              <button type="button" onClick={handleCopy}
+              {/* Copy — icon only */}
+              <button type="button" onClick={handleCopy} title={copied ? 'Copied!' : 'Copy current tab'}
                 style={{
-                  display: 'flex', alignItems: 'center', gap: 5,
-                  padding: '5px 10px', borderRadius: 7,
-                  background: copied ? '#f0fdf4' : '#F5F7FA',
-                  border: `1px solid ${copied ? '#dcfce7' : '#E4E9F0'}`,
-                  cursor: 'pointer', fontSize: 11, fontWeight: 700,
-                  color: copied ? '#16a34a' : NAVY,
-                  textTransform: 'uppercase', letterSpacing: '0.06em',
-                  transition: 'all 150ms',
-                }}>
-                {copied ? <Check size={11} strokeWidth={2.5} /> : <Copy size={11} strokeWidth={2} />}
-                {copied ? 'Copied' : 'Copy'}
+                  width: 30, height: 30, borderRadius: 7, border: `1px solid ${copied ? '#dcfce7' : '#E4E9F0'}`,
+                  background: copied ? '#f0fdf4' : '#F5F7FA', cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  color: copied ? '#16a34a' : NAVY, flexShrink: 0, transition: 'all 150ms',
+                }}
+                onMouseEnter={(e) => { if (!copied) { e.currentTarget.style.background = '#ECF0F5'; } }}
+                onMouseLeave={(e) => { if (!copied) { e.currentTarget.style.background = '#F5F7FA'; } }}
+              >
+                {copied ? <Check size={12} strokeWidth={2.5} /> : <Copy size={12} strokeWidth={2} />}
               </button>
 
-              {/* Download dropdown */}
+              {/* Download — icon only with chevron */}
               <div style={{ position: 'relative' }} ref={dlRef}>
-                <button type="button" onClick={() => setDlOpen(v => !v)}
+                <button type="button" onClick={() => setDlOpen(v => !v)} title="Export minutes"
                   style={{
-                    display: 'flex', alignItems: 'center', gap: 5,
-                    padding: '5px 10px', height: 30, borderRadius: 7,
-                    background: downloaded ? '#f0fdf4' : '#F5F7FA',
-                    border: `1px solid ${downloaded ? '#dcfce7' : '#E4E9F0'}`,
-                    cursor: 'pointer', fontSize: 11, fontWeight: 700,
-                    color: downloaded ? '#16a34a' : NAVY,
-                    textTransform: 'uppercase', letterSpacing: '0.06em',
-                    transition: 'all 130ms',
+                    height: 30, borderRadius: 7, border: `1px solid ${downloaded ? '#dcfce7' : '#E4E9F0'}`,
+                    background: downloaded ? '#f0fdf4' : '#F5F7FA', cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 2,
+                    color: downloaded ? '#16a34a' : NAVY, flexShrink: 0,
+                    padding: '0 8px', transition: 'all 150ms',
                   }}
-                  onMouseEnter={(e) => { if (!downloaded) { e.currentTarget.style.background = '#ECF0F5'; e.currentTarget.style.borderColor = '#C8D2DE'; } }}
-                  onMouseLeave={(e) => { if (!downloaded) { e.currentTarget.style.background = '#F5F7FA'; e.currentTarget.style.borderColor = '#E4E9F0'; } }}
+                  onMouseEnter={(e) => { if (!downloaded) { e.currentTarget.style.background = '#ECF0F5'; } }}
+                  onMouseLeave={(e) => { if (!downloaded) { e.currentTarget.style.background = '#F5F7FA'; } }}
                 >
                   {downloaded
-                    ? <><Check size={11} strokeWidth={2.5} /> Saved</>
-                    : <><Download size={11} strokeWidth={2} /> Export <ChevronDown size={10} style={{ color: '#A8B4C0', transform: dlOpen ? 'rotate(180deg)' : 'none', transition: 'transform 180ms' }} /></>
+                    ? <Check size={12} strokeWidth={2.5} />
+                    : <><Download size={12} strokeWidth={2} /><ChevronDown size={9} style={{ color: '#A8B4C0' }} /></>
                   }
                 </button>
                 {dlOpen && (

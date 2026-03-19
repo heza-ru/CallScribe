@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Home, FileText, Lightbulb, BarChart2, Settings, Mic, ClipboardList, MessageCircle, Target } from 'lucide-react';
+import { Home, FileText, Lightbulb, BarChart2, Settings, Mic, ClipboardList, MessageCircle, Target, BookOpen } from 'lucide-react';
 import { SCREENS } from '../constants';
 
 const ORANGE = '#E55014';
@@ -15,6 +15,7 @@ function getActiveNav(screen) {
     [SCREENS.MOM]:                'mom',
     [SCREENS.CHAT]:               'chat',
     [SCREENS.DEMO_SCOPE]:         'demo_scope',
+    [SCREENS.EXEC_SUMMARY]:       'exec_summary',
     [SCREENS.SETTINGS]:           'settings',
   };
   return map[screen] || 'home';
@@ -92,10 +93,11 @@ function NavItem({ icon: Icon, label, active, enabled, loading, onClick }) {
 
 export function AppShell({ state, dispatch, children }) {
   const activeNav          = getActiveNav(state.screen);
-  const hasTranscript      = !!state.transcript;
-  const hasInsights        = (state.insights || []).length > 0;
-  const hasIntelligence    = state.callIntelligence !== null;
+  const hasTranscript       = !!state.transcript;
+  const hasInsights         = (state.insights || []).length > 0;
+  const hasIntelligence     = state.callIntelligence !== null;
   const loadingIntelligence = state.callIntelligence === 'loading';
+  const loadingExecSummary  = state.execSummary === 'loading';
 
   const topItems = [
     {
@@ -147,6 +149,14 @@ export function AppShell({ state, dispatch, children }) {
       label:   'Demo Scope',
       screen:  SCREENS.DEMO_SCOPE,
       enabled: hasTranscript,
+    },
+    {
+      id:      'exec_summary',
+      icon:    BookOpen,
+      label:   'Exec Summary',
+      screen:  SCREENS.EXEC_SUMMARY,
+      enabled: hasTranscript,
+      loading: loadingExecSummary,
     },
   ];
 

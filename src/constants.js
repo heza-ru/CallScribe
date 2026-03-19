@@ -7,5 +7,6 @@ export const SCREENS = {
   MOM:                'mom',
   CHAT:               'chat',
   DEMO_SCOPE:         'demo_scope',
+  EXEC_SUMMARY:       'exec_summary',
   SETTINGS:           'settings',
 };

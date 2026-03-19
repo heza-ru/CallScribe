@@ -156,7 +156,7 @@
     // Iframe
     const iframe = document.createElement('iframe');
     iframe.id = 'callscribe-iframe';
-    iframe.src = chrome.runtime.getURL('index.html');
+    iframe.src = (chrome.runtime && chrome.runtime.getURL) ? chrome.runtime.getURL('index.html') : '';
     iframe.allow = 'clipboard-write';
 
     rootEl.appendChild(handle);
@@ -256,9 +256,11 @@
     }
   }
 
-  chrome.runtime.onMessage.addListener((message) => {
-    if (message.type === 'TOGGLE_PANEL') {
-      togglePanel();
-    }
-  });
+  try {
+    chrome.runtime.onMessage.addListener((message) => {
+      if (message.type === 'TOGGLE_PANEL') {
+        togglePanel();
+      }
+    });
+  } catch { /* extension context invalidated — ignore */ }
 })();

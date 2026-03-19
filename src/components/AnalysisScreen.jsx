@@ -7,7 +7,7 @@ import {
 import { analyzeTranscript, analyzeCallIntelligence } from '../services/claudeService';
 import { createJiraTicket } from '../services/jiraService';
 import { createProductboardInsight } from '../services/productboardService';
-import { downloadAllInsights, downloadSingleInsight } from '../utils/analysisFormatter';
+import { downloadAllInsights, downloadSingleInsight, downloadFullReport } from '../utils/analysisFormatter';
 import { SCREENS } from '../constants';
 
 const ORANGE = '#E55014';
@@ -301,10 +301,11 @@ function GroupHeader({ label, color, count }) {
 }
 
 const EXPORT_FORMATS = [
-  { fmt: 'md',   label: 'Markdown',   ext: '.md'   },
-  { fmt: 'json', label: 'JSON',       ext: '.json'  },
-  { fmt: 'csv',  label: 'CSV',        ext: '.csv'   },
-  { fmt: 'txt',  label: 'Plain Text', ext: '.txt'   },
+  { fmt: 'md',   label: 'Markdown',              ext: '.md'   },
+  { fmt: 'json', label: 'JSON',                  ext: '.json'  },
+  { fmt: 'csv',  label: 'CSV',                   ext: '.csv'   },
+  { fmt: 'doc',  label: 'Word / Google Docs',    ext: '.doc'   },
+  { fmt: 'txt',  label: 'Plain Text',            ext: '.txt'   },
 ];
 
 export function AnalysisScreen({ state, dispatch }) {
@@ -391,13 +392,16 @@ export function AnalysisScreen({ state, dispatch }) {
   async function handleReanalyze() {
     setError(null);
     setReanalyzing(true);
-    const { transcript, meetingId, settings } = state;
+    const { transcript, meetingId, settings, callIntelligence } = state;
     const apiKey = settings?.claudeApiKey;
 
-    dispatch({ type: 'CALL_INTELLIGENCE_LOADING' });
-    analyzeCallIntelligence(transcript, meetingId, apiKey)
-      .then(ci => dispatch({ type: 'CALL_INTELLIGENCE_LOADED', callIntelligence: ci }))
-      .catch(() => dispatch({ type: 'CALL_INTELLIGENCE_FAILED' }));
+    // Only trigger call intelligence if not already loaded
+    if (!callIntelligence || callIntelligence === null) {
+      dispatch({ type: 'CALL_INTELLIGENCE_LOADING' });
+      analyzeCallIntelligence(transcript, meetingId, apiKey)
+        .then(ci => dispatch({ type: 'CALL_INTELLIGENCE_LOADED', callIntelligence: ci }))
+        .catch(() => dispatch({ type: 'CALL_INTELLIGENCE_FAILED' }));
+    }
 
     try {
       const newInsights = await analyzeTranscript(transcript, meetingId, apiKey);

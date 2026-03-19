@@ -35,12 +35,14 @@
   }
 
   function notifyBackground(meetingId, token) {
-    chrome.runtime.sendMessage({
-      type: 'MINDTICKLE_DETECTED',
-      meetingId,
-      token,
-      url: window.location.href,
-    });
+    try {
+      chrome.runtime.sendMessage({
+        type: 'MINDTICKLE_DETECTED',
+        meetingId,
+        token,
+        url: window.location.href,
+      });
+    } catch { /* extension context invalidated — ignore */ }
   }
 
   function init() {

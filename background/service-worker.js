@@ -18,8 +18,8 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
       enabled: isMindtickle,
     });
   }
-  // Clear cached transcript state on page navigation
-  if (changeInfo.status === 'loading') {
+  // Clear cached state on full page load OR SPA URL change
+  if (changeInfo.status === 'loading' || changeInfo.url) {
     tabState.delete(tabId);
   }
 });
@@ -33,11 +33,20 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     case 'MINDTICKLE_DETECTED': {
       const tabId = sender.tab?.id;
       if (tabId == null) break;
+      const prev = tabState.get(tabId);
       tabState.set(tabId, {
         meetingId: message.meetingId,
         token: message.token,
         url: message.url,
       });
+      // Notify the side panel when a different call is detected
+      if (prev?.meetingId !== message.meetingId) {
+        chrome.runtime.sendMessage({
+          type: 'MEETING_CHANGED',
+          meetingId: message.meetingId,
+          token: message.token,
+        }).catch(() => {}); // side panel may not be open — ignore
+      }
       break;
     }
 

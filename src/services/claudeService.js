@@ -2,7 +2,7 @@ import {
   buildRequestBody, buildIntelligenceRequestBody,
   buildCompetitorRequestBody, buildObjectionRequestBody,
   buildMOMRequestBody, buildChatRequestBody,
-  buildDemoScopeRequestBody,
+  buildDemoScopeRequestBody, buildExecSummaryRequestBody,
 } from '../utils/promptBuilder';
 import { DEMO_ENVIRONMENTS } from '../data/demoEnvironments';
 import { compressTranscript } from '../utils/transcriptCompressor';
@@ -102,10 +102,19 @@ export async function analyzeCallIntelligence(transcript, meetingId, apiKey) {
   return parseIntelligence(rawContent);
 }
 
+function extractJSONObject(raw) {
+  const cleaned = raw.trim().replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '');
+  try { return JSON.parse(cleaned); } catch { /* fall through */ }
+  const match = cleaned.match(/\{[\s\S]*\}/);
+  if (match) {
+    try { return JSON.parse(match[0]); } catch { /* fall through */ }
+  }
+  throw new Error('No valid JSON object found in Claude response');
+}
+
 function parseIntelligence(raw) {
-  const cleaned = raw.trim().replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '');
   try {
-    const parsed = JSON.parse(cleaned);
+    const parsed = extractJSONObject(raw);
     // Normalize + clamp numeric fields
     return {
       callType: parsed.callType || 'Discovery',
@@ -135,13 +144,23 @@ function parseIntelligence(raw) {
   }
 }
 
+function extractJSONArray(raw) {
+  // Strip markdown fences
+  const cleaned = raw.trim().replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '');
+  // Try direct parse
+  try { return JSON.parse(cleaned); } catch { /* fall through */ }
+  // Extract the first complete JSON array (handles trailing explanation text)
+  const match = cleaned.match(/\[[\s\S]*\]/);
+  if (match) {
+    try { return JSON.parse(match[0]); } catch { /* fall through */ }
+  }
+  throw new Error('No valid JSON array found in Claude response');
+}
+
 function parseInsights(raw) {
-  const cleaned = raw.trim().replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '');
-
   try {
-    const parsed = JSON.parse(cleaned);
+    const parsed = extractJSONArray(raw);
     if (!Array.isArray(parsed)) throw new Error('Expected a JSON array from Claude');
-
     return parsed.map((item, i) => ({
       id: `insight-${i}-${Date.now()}`,
       title: item.title || 'Untitled Insight',
@@ -172,7 +191,7 @@ function normalizeType(t) {
 
 // ─── Shared fetch helper ──────────────────────────────────────────
 
-async function claudeFetch(body, apiKey) {
+async function claudeFetch(body, apiKey, signal) {
   const response = await fetch(CLAUDE_API_URL, {
     method: 'POST',
     headers: {
@@ -182,6 +201,7 @@ async function claudeFetch(body, apiKey) {
       'anthropic-dangerous-direct-browser-access': 'true',
     },
     body: JSON.stringify(body),
+    ...(signal ? { signal } : {}),
   });
   if (!response.ok) {
     const errText = await response.text().catch(() => '');
@@ -203,9 +223,8 @@ export async function detectCompetitors(transcript, apiKey) {
   const raw = data?.content?.[0]?.text;
   if (!raw) throw new Error('Empty response from Claude API');
   recordTokens('competitors', data.usage?.input_tokens, data.usage?.output_tokens).catch(() => {});
-  const cleaned = raw.trim().replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '');
   try {
-    const parsed = JSON.parse(cleaned);
+    const parsed = extractJSONObject(raw);
     return {
       competitors: Array.isArray(parsed.competitors) ? parsed.competitors : [],
       summary: parsed.summary || '',
@@ -226,9 +245,8 @@ export async function trackObjections(transcript, apiKey) {
   const raw = data?.content?.[0]?.text;
   if (!raw) throw new Error('Empty response from Claude API');
   recordTokens('objections', data.usage?.input_tokens, data.usage?.output_tokens).catch(() => {});
-  const cleaned = raw.trim().replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '');
   try {
-    const parsed = JSON.parse(cleaned);
+    const parsed = extractJSONObject(raw);
     return {
       objections:    Array.isArray(parsed.objections) ? parsed.objections : [],
       handledCount:  parsed.handledCount  ?? 0,
@@ -251,9 +269,8 @@ export async function generateMOM(transcript, meetingId, apiKey) {
   const raw = data?.content?.[0]?.text;
   if (!raw) throw new Error('Empty response from Claude API');
   recordTokens('mom', data.usage?.input_tokens, data.usage?.output_tokens).catch(() => {});
-  const cleaned = raw.trim().replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '');
   try {
-    const parsed = JSON.parse(cleaned);
+    const parsed = extractJSONObject(raw);
     return {
       internal: parsed.internal || '',
       external: parsed.external || '',
@@ -274,9 +291,8 @@ export async function analyzeDemoScope(transcript, apiKey) {
   const raw = data?.content?.[0]?.text;
   if (!raw) throw new Error('Empty response from Claude API');
   recordTokens('demo_scope', data.usage?.input_tokens, data.usage?.output_tokens).catch(() => {});
-  const cleaned = raw.trim().replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '');
   try {
-    const parsed = JSON.parse(cleaned);
+    const parsed = extractJSONObject(raw);
     // Hydrate recommendations with full env objects
     const recs = (parsed.recommendations || []).map(r => ({
       ...r,
@@ -292,6 +308,46 @@ export async function analyzeDemoScope(transcript, apiKey) {
     };
   } catch (e) {
     throw new Error('Failed to parse demo scope response: ' + e.message);
+  }
+}
+
+// ─── Executive Demo Analysis ──────────────────────────────────────
+
+export async function generateExecSummary(transcript, meetingId, apiKey) {
+  if (!apiKey) throw new Error('Claude API key is not configured.');
+  const { text: compressed } = compressTranscript(transcript);
+  const body = buildExecSummaryRequestBody(compressed);
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 4 * 60 * 1000); // 4 min hard timeout
+  let response;
+  try {
+    response = await claudeFetch(body, apiKey, controller.signal);
+  } finally {
+    clearTimeout(timeout);
+  }
+
+  const data = await response.json();
+  const raw = data?.content?.[0]?.text;
+  if (!raw) throw new Error('Empty response from Claude API');
+  recordTokens('exec_summary', data.usage?.input_tokens, data.usage?.output_tokens).catch(() => {});
+  try {
+    const parsed = extractJSONObject(raw);
+    return {
+      storyline:           parsed.storyline           || '',
+      useCases:            parsed.useCases            || '',
+      featureDemoQuality:  parsed.featureDemoQuality  || '',
+      differentiation:     parsed.differentiation     || '',
+      questionsObjections: parsed.questionsObjections || '',
+      infosec:             parsed.infosec             || '',
+      gaps:                parsed.gaps                || '',
+      improvements:        parsed.improvements        || '',
+      scores:              parsed.scores              || {},
+      executiveSummary:    Array.isArray(parsed.executiveSummary) ? parsed.executiveSummary : [],
+      followUpActions:     Array.isArray(parsed.followUpActions)  ? parsed.followUpActions  : [],
+    };
+  } catch (e) {
+    throw new Error('Failed to parse exec summary response: ' + e.message);
   }
 }
 
