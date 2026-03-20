@@ -2,7 +2,8 @@ import {
   buildRequestBody, buildIntelligenceRequestBody,
   buildCompetitorRequestBody, buildObjectionRequestBody,
   buildMOMRequestBody, buildChatRequestBody,
-  buildDemoScopeRequestBody, buildExecSummaryRequestBody,
+  buildDemoScopeRequestBody,
+  buildExecSummaryPart1Body, buildExecSummaryPart2Body,
 } from '../utils/promptBuilder';
 import { DEMO_ENVIRONMENTS } from '../data/demoEnvironments';
 import { compressTranscript } from '../utils/transcriptCompressor';
@@ -312,42 +313,59 @@ export async function analyzeDemoScope(transcript, apiKey) {
 }
 
 // ─── Executive Demo Analysis ──────────────────────────────────────
+// Split into two parallel calls so neither exceeds the output token limit,
+// which would cause truncation and JSON parse failure on long (1–2h) calls.
 
 export async function generateExecSummary(transcript, meetingId, apiKey) {
   if (!apiKey) throw new Error('Claude API key is not configured.');
   const { text: compressed } = compressTranscript(transcript);
-  const body = buildExecSummaryRequestBody(compressed);
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 4 * 60 * 1000); // 4 min hard timeout
-  let response;
-  try {
-    response = await claudeFetch(body, apiKey, controller.signal);
-  } finally {
-    clearTimeout(timeout);
-  }
+  const timeout = setTimeout(() => controller.abort(), 7 * 60 * 1000); // 7 min hard timeout
 
-  const data = await response.json();
-  const raw = data?.content?.[0]?.text;
-  if (!raw) throw new Error('Empty response from Claude API');
-  recordTokens('exec_summary', data.usage?.input_tokens, data.usage?.output_tokens).catch(() => {});
+  // Stagger by 2s so two large requests don't hit the API simultaneously
+  const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
   try {
-    const parsed = extractJSONObject(raw);
+    const [res1, res2] = await Promise.all([
+      claudeFetch(buildExecSummaryPart1Body(compressed), apiKey, controller.signal).then(r => r.json()),
+      delay(2000).then(() => claudeFetch(buildExecSummaryPart2Body(compressed), apiKey, controller.signal).then(r => r.json())),
+    ]);
+
+    const raw1 = res1?.content?.[0]?.text;
+    const raw2 = res2?.content?.[0]?.text;
+    if (!raw1) throw new Error('Empty response from Claude API (part 1)');
+    if (!raw2) throw new Error('Empty response from Claude API (part 2)');
+
+    recordTokens('exec_summary',
+      (res1.usage?.input_tokens  || 0) + (res2.usage?.input_tokens  || 0),
+      (res1.usage?.output_tokens || 0) + (res2.usage?.output_tokens || 0)
+    ).catch(() => {});
+
+    const p1 = extractJSONObject(raw1);
+    const p2 = extractJSONObject(raw2);
+
     return {
-      storyline:           parsed.storyline           || '',
-      useCases:            parsed.useCases            || '',
-      featureDemoQuality:  parsed.featureDemoQuality  || '',
-      differentiation:     parsed.differentiation     || '',
-      questionsObjections: parsed.questionsObjections || '',
-      infosec:             parsed.infosec             || '',
-      gaps:                parsed.gaps                || '',
-      improvements:        parsed.improvements        || '',
-      scores:              parsed.scores              || {},
-      executiveSummary:    Array.isArray(parsed.executiveSummary) ? parsed.executiveSummary : [],
-      followUpActions:     Array.isArray(parsed.followUpActions)  ? parsed.followUpActions  : [],
+      // Markdown prose sections
+      storyline:    p1.storyline    || '',
+      useCases:     p1.useCases     || '',
+      infosec:      p2.infosec      || '',
+      gaps:         p2.gaps         || '',
+      improvements: p2.improvements || '',
+      // Structured arrays/objects
+      features:       Array.isArray(p1.features) ? p1.features : [],
+      differentiation: p1.differentiation && typeof p1.differentiation === 'object' ? p1.differentiation : { shown: [], missedNow: [], saveLater: [], whyWhatfix: '', vsOthers: '', overallRating: '' },
+      questions:      Array.isArray(p2.questions) ? p2.questions : [],
+      // Summary data
+      scores:           p2.scores || {},
+      executiveSummary: Array.isArray(p2.executiveSummary) ? p2.executiveSummary : [],
+      followUpActions:  Array.isArray(p2.followUpActions)  ? p2.followUpActions  : [],
     };
   } catch (e) {
-    throw new Error('Failed to parse exec summary response: ' + e.message);
+    if (e.name === 'AbortError') throw new Error('Analysis timed out. Please try again.');
+    throw e;
+  } finally {
+    clearTimeout(timeout);
   }
 }
 

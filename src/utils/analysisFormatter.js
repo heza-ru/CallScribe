@@ -741,6 +741,15 @@ function execMdToHTML(md) {
     .replace(/\n\n/g, '</p><p>');
 }
 
+const Q_CAT_LABEL_MD = {
+  'product-capability': 'Product Capability',
+  'use-case-fit':       'Use Case Fit',
+  'pricing-roi':        'Pricing / ROI',
+  'competition':        'Competition',
+  'implementation':     'Implementation',
+  'security-infosec':   'Security / InfoSec',
+};
+
 export function execSummaryToMarkdown(data, meetingId) {
   const lines = [
     '# Executive Demo Analysis',
@@ -762,11 +771,54 @@ export function execSummaryToMarkdown(data, meetingId) {
     data.executiveSummary.forEach(b => lines.push(`- ${b}`));
     lines.push('');
   }
-  EXEC_SECTION_KEYS.forEach(({ key, title }) => {
-    if (data[key]) {
-      lines.push(`## ${title}`, '', data[key], '', '---', '');
+  if (data.storyline)    lines.push('## 1. Demo Storyline & Flow', '', data.storyline, '', '---', '');
+  if (data.useCases)     lines.push('## 2. Use Cases & Product Positioning', '', data.useCases, '', '---', '');
+  if (data.features?.length) {
+    lines.push('## 3. Feature Demonstration Quality', '');
+    data.features.forEach(f => {
+      lines.push(`### ${f.name}`);
+      lines.push(`- Module: ${f.module}`);
+      lines.push(`- Use Case: ${f.useCase}`);
+      lines.push(`- Demo Quality: ${f.quality}${f.valueArticulated ? ' | Value articulated' : ''}`);
+      lines.push('');
+    });
+    lines.push('---', '');
+  }
+  if (data.differentiation) {
+    const d = data.differentiation;
+    lines.push('## 4. Whatfix Differentiation Analysis', '');
+    lines.push(`**Why Whatfix?** ${d.whyWhatfix || '—'}  |  **vs Others?** ${d.vsOthers || '—'}  |  **Overall:** ${d.overallRating || '—'}`, '');
+    if (d.shown?.length) {
+      lines.push('### Differentiators Presented', '');
+      d.shown.forEach(s => lines.push(`- ${s.differentiator} (${s.positioning})`));
+      lines.push('');
     }
-  });
+    if (d.missedNow?.length) {
+      lines.push('### Could Have Introduced', '');
+      d.missedNow.forEach(s => lines.push(`- ${s}`));
+      lines.push('');
+    }
+    if (d.saveLater?.length) {
+      lines.push('### Save for Later', '');
+      d.saveLater.forEach(s => lines.push(`- ${s}`));
+      lines.push('');
+    }
+    lines.push('---', '');
+  }
+  if (data.questions?.length) {
+    lines.push('## 5. Customer Questions, Objections & Responses', '');
+    data.questions.forEach((q, i) => {
+      lines.push(`### Q${i + 1}: ${q.question}`);
+      lines.push(`- Category: ${Q_CAT_LABEL_MD[q.category] || q.category}`);
+      lines.push(`- Response quality: ${q.quality}${q.urgency === 'now' ? ' — Address Now' : ''}`);
+      if (q.response) lines.push(`- Response: ${q.response}`);
+      lines.push('');
+    });
+    lines.push('---', '');
+  }
+  if (data.infosec)      lines.push('## 6. InfoSec / Deployment Deep Dive', '', data.infosec, '', '---', '');
+  if (data.gaps)         lines.push('## 7. Gaps & Missed Opportunities', '', data.gaps, '', '---', '');
+  if (data.improvements) lines.push('## 8. Opportunities & Improvements', '', data.improvements, '', '---', '');
   if (data.followUpActions?.length) {
     lines.push('## Follow-up Actions', '');
     data.followUpActions.forEach((a, i) => lines.push(`${i + 1}. ${a}`));
@@ -777,8 +829,8 @@ export function execSummaryToMarkdown(data, meetingId) {
 
 export function execSummaryToWordDoc(data, meetingId) {
   const scoreColors = { 1: '#dc2626', 2: '#f97316', 3: '#d97706', 4: '#16a34a', 5: '#15803d' };
+  const qualColors  = { complete: '#16a34a', partial: '#d97706', deflected: '#f97316', unanswered: '#dc2626' };
 
-  // Scores table
   let body = '<h2>Demo Effectiveness Scores</h2>';
   body += '<table><tr><th>Dimension</th><th>Score</th><th>Rating</th><th>Rationale</th></tr>';
   Object.entries(EXEC_SCORE_KEYS).forEach(([key, label]) => {
@@ -794,28 +846,77 @@ export function execSummaryToWordDoc(data, meetingId) {
   });
   body += '</table>';
 
-  // Executive Summary
   if (data.executiveSummary?.length) {
     body += '<h2>Executive Summary</h2><ul>';
     data.executiveSummary.forEach(b => { body += `<li>${escapeHTML(b)}</li>`; });
     body += '</ul><hr>';
   }
 
-  // Follow-up Actions
   if (data.followUpActions?.length) {
     body += '<h2>Follow-up Actions</h2><ol>';
     data.followUpActions.forEach(a => { body += `<li>${escapeHTML(a)}</li>`; });
     body += '</ol><hr>';
   }
 
-  // Detailed sections
-  EXEC_SECTION_KEYS.forEach(({ key, title }) => {
-    if (data[key]) {
-      body += `<h2>${escapeHTML(title)}</h2>`;
-      body += execMdToHTML(data[key]);
-      body += '<hr>';
+  if (data.storyline) { body += '<h2>1. Demo Storyline &amp; Flow</h2>' + execMdToHTML(data.storyline) + '<hr>'; }
+  if (data.useCases)  { body += '<h2>2. Use Cases &amp; Product Positioning</h2>' + execMdToHTML(data.useCases) + '<hr>'; }
+
+  if (data.features?.length) {
+    body += '<h2>3. Feature Demonstration Quality</h2>';
+    body += '<table><tr><th>Feature</th><th>Module</th><th>Use Case</th><th>Quality</th></tr>';
+    data.features.forEach(f => {
+      const col = f.quality === 'strong' ? '#16a34a' : f.quality === 'moderate' ? '#d97706' : '#dc2626';
+      body += `<tr>
+        <td><strong>${escapeHTML(f.name)}</strong></td>
+        <td>${escapeHTML(f.module || '')}</td>
+        <td>${escapeHTML(f.useCase || '')}</td>
+        <td><span style="color:${col};font-weight:bold">${escapeHTML(f.quality || '')}${f.valueArticulated ? ' — value articulated' : ''}</span></td>
+      </tr>`;
+    });
+    body += '</table><hr>';
+  }
+
+  if (data.differentiation) {
+    const d = data.differentiation;
+    body += '<h2>4. Whatfix Differentiation Analysis</h2>';
+    body += `<p><strong>Why Whatfix?</strong> ${escapeHTML(d.whyWhatfix || '—')} &nbsp;|&nbsp; <strong>vs Others?</strong> ${escapeHTML(d.vsOthers || '—')} &nbsp;|&nbsp; <strong>Overall:</strong> ${escapeHTML(d.overallRating || '—')}</p>`;
+    if (d.shown?.length) {
+      body += '<h3>Differentiators Presented</h3><ul>';
+      d.shown.forEach(s => { body += `<li><strong>${escapeHTML(s.differentiator)}</strong> — ${escapeHTML(s.positioning)}</li>`; });
+      body += '</ul>';
     }
-  });
+    if (d.missedNow?.length) {
+      body += '<h3>Could Have Introduced</h3><ul>';
+      d.missedNow.forEach(s => { body += `<li>${escapeHTML(s)}</li>`; });
+      body += '</ul>';
+    }
+    if (d.saveLater?.length) {
+      body += '<h3>Save for Later</h3><ul>';
+      d.saveLater.forEach(s => { body += `<li>${escapeHTML(s)}</li>`; });
+      body += '</ul>';
+    }
+    body += '<hr>';
+  }
+
+  if (data.questions?.length) {
+    body += '<h2>5. Customer Questions, Objections &amp; Responses</h2>';
+    body += '<table><tr><th>#</th><th>Question</th><th>Category</th><th>Quality</th><th>Response</th></tr>';
+    data.questions.forEach((q, i) => {
+      const col = qualColors[q.quality] || '#6b7280';
+      body += `<tr>
+        <td>${i + 1}</td>
+        <td>${escapeHTML(q.question)}</td>
+        <td>${escapeHTML(Q_CAT_LABEL_MD[q.category] || q.category || '')}</td>
+        <td><span style="color:${col};font-weight:bold">${escapeHTML(q.quality)}${q.urgency === 'now' ? ' — Address Now' : ''}</span></td>
+        <td>${escapeHTML(q.response || '')}</td>
+      </tr>`;
+    });
+    body += '</table><hr>';
+  }
+
+  if (data.infosec)      { body += '<h2>6. InfoSec / Deployment Deep Dive</h2>'    + execMdToHTML(data.infosec)      + '<hr>'; }
+  if (data.gaps)         { body += '<h2>7. Gaps &amp; Missed Opportunities</h2>'   + execMdToHTML(data.gaps)         + '<hr>'; }
+  if (data.improvements) { body += '<h2>8. Opportunities &amp; Improvements</h2>'  + execMdToHTML(data.improvements) + '<hr>'; }
 
   return wrapWordHTML('Executive Demo Analysis', body, meetingId);
 }

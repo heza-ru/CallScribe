@@ -509,7 +509,8 @@ export function buildDemoScopeRequestBody(transcript, envList) {
 // Executive Demo Analysis
 // ─────────────────────────────────────────────────────────────────
 
-export const EXEC_SUMMARY_SYSTEM_PROMPT = `You are a senior sales solutions analyst reviewing a Whatfix demo call transcript.
+// Shared context block used by both parts
+const EXEC_ANALYSIS_CONTEXT = `You are a senior sales solutions analyst reviewing a Whatfix demo call transcript.
 Analyze the transcript deeply and extract insights in a structured format focusing on demo storytelling, product positioning, differentiation, and customer handling.
 
 Important context for your analysis:
@@ -522,44 +523,119 @@ Important context for your analysis:
   * Did it create enough value and curiosity for a second / deeper call?
 * In the differentiation section, separate: differentiators appropriately introduced in this call vs differentiators better reserved for later calls.
 * In gaps / improvements, distinguish between: true misses in this call vs topics better handled in next calls.
-* Be practical and realistic. Do not expect a full late-stage evaluation from an early discovery/demo conversation.
+* Be practical and realistic. Do not expect a full late-stage evaluation from an early discovery/demo conversation.`;
 
-Analyse these 8 dimensions thoroughly:
+// Part 1 — Sections 1–4: Storyline, Use Cases, Features, Differentiation
+const EXEC_SUMMARY_PART1_PROMPT = `${EXEC_ANALYSIS_CONTEXT}
 
-1. Demo Storyline & Flow — Who attended (prospect + Whatfix), how demo was structured, what narrative was used, was it tailored or generic, did flow logically connect use case → feature → value, was it appropriate for the call stage.
+Analyse these 4 dimensions:
 
-2. Use Cases & Product Positioning — What use cases were presented, which products/modules introduced (DAP, Mirror, Product Analytics, AI Agents, etc.), how clearly products mapped to customer problems, was breadth/depth right for this stage.
+1. Demo Storyline & Flow
+- Who were present from the prospect/customer side, and their roles
+- Who were present from the Whatfix team, and their roles
+- How was the demo structured? (e.g. intro -> problem -> solution -> demo -> validation -> next steps)
+- What narrative/storyline was used? Explain the storyline.
+- Was the demo tailored to the customer's context or was it generic?
+- Did the flow logically connect use case -> feature -> value?
+- Evaluate whether the flow was appropriate for a first / early call
 
-3. Feature Demonstration Quality — Key features demonstrated, mapped to product/module + customer use case, evaluation: features shown with business context or just shown? Outcomes articulated? Level of detail appropriate for early stage?
+2. Use Cases & Product Positioning
+- What use case(s) were presented?
+- What products/modules were introduced (DAP, Mirror, Product Analytics, AI Agents, etc.)?
+- How clearly were products mapped to customer problems?
+- Was the breadth/depth of product positioning right for this stage of the deal?
 
-4. Whatfix Differentiation Analysis — Differentiators explicitly or implicitly presented: how positioned, tied to pain or just stated, compared against alternatives. Then: missed differentiators (lightly introduceable now vs save for later). Did it answer "Why Whatfix?" and "Why Whatfix vs others?"
+3. Feature Demonstration Quality
+- List each key feature demonstrated
+- For each feature: a) Product/module, b) Customer use case it addressed, c) whether business context was given (strong/moderate/weak), d) whether outcomes/value were clearly articulated (true/false)
 
-5. Customer Questions, Objections & Responses — All customer questions categorised (Product capability / Use case fit / Pricing-ROI / Competition / Implementation / Security-InfoSec). For each: response given, quality (clear/partial/deflected/unanswered). Highlight weak or missed responses. Note if unanswered points are real issues now or can be addressed later.
-
-6. InfoSec / Deployment Deep Dive — Mentions of security concerns, data privacy, deployment model, compliance. How well handled for the deal stage. Which were reasonably deferred vs real deal risks needing follow-up.
-
-7. Gaps & Missed Opportunities — Where the demo lacked personalization, missed feature→value links, failed to highlight differentiation, lost narrative control, had technical/positioning/storytelling gaps. Separate genuine misses from acceptable topics for later.
-
-8. Opportunities & Improvements — What could have been done better: flow improvements, stronger differentiation, better feature-value mapping, stronger use case anchoring, better customer handling. What additional capabilities for next calls. What to avoid. Suggested next best actions.
+4. Whatfix Differentiation Analysis
+- List each differentiator explicitly or implicitly presented
+- For each: how was it positioned (pain-led/capability-stated/both), was it compared against alternatives (true/false), was it appropriate for this call stage (true/false)
+- Identify: differentiators missed but could have been lightly introduced NOW
+- Identify: differentiators better SAVED FOR LATER calls
+- Evaluate: Did the demo answer "Why Whatfix?" (strong/light/not yet)? "Why Whatfix vs others?" (strong/light/not yet)? Overall differentiation rating (strong/moderate/weak/intentionally light).
 
 OUTPUT FORMAT:
 Return ONLY valid JSON, no markdown fences, no preamble:
 {
-  "storyline": "Markdown-formatted analysis of Demo Storyline & Flow. Use ### sub-headers and - bullet points.",
-  "useCases": "Markdown-formatted analysis of Use Cases & Product Positioning.",
-  "featureDemoQuality": "Markdown-formatted analysis of Feature Demonstration Quality.",
-  "differentiation": "Markdown-formatted analysis of Whatfix Differentiation Analysis.",
-  "questionsObjections": "Markdown-formatted analysis of Customer Questions, Objections & Responses.",
-  "infosec": "Markdown-formatted analysis of InfoSec / Deployment Deep Dive.",
-  "gaps": "Markdown-formatted analysis of Gaps & Missed Opportunities.",
-  "improvements": "Markdown-formatted analysis of Opportunities & Improvements.",
+  "storyline": "Markdown prose. Use ### sub-headers and - bullets. Add timestamps e.g. [~5:20]. Max 150 words.",
+  "useCases": "Markdown prose. Use ### sub-headers and - bullets. Max 100 words.",
+  "features": [
+    {
+      "name": "Feature name",
+      "module": "DAP | Mirror | Product Analytics | AI Agents | etc",
+      "useCase": "The customer use case it addressed",
+      "quality": "strong | moderate | weak",
+      "valueArticulated": true
+    }
+  ],
+  "differentiation": {
+    "shown": [
+      { "differentiator": "...", "positioning": "pain-led | capability-stated | both", "appropriate": true }
+    ],
+    "missedNow": ["differentiator that could have been lightly introduced in this call"],
+    "saveLater": ["differentiator better saved for later calls"],
+    "whyWhatfix": "strong | light | not yet",
+    "vsOthers": "strong | light | not yet",
+    "overallRating": "strong | moderate | weak | intentionally light"
+  }
+}
+
+Rules:
+- features: array of objects, max 12 entries (most impactful only). No markdown inside fields.
+- differentiation: structured object as shown. No markdown inside fields. shown: max 8 items. missedNow: max 4 items. saveLater: max 4 items.
+- storyline and useCases: markdown strings only, max word limits above.
+- Add timestamps in storyline/useCases where relevant.
+- Do not use any emoji, checkmarks, cross marks, tick symbols, or special Unicode symbols. Plain text only.
+- CONSISTENCY RULE: Given the same transcript, always produce identical output across runs.`;
+
+// Part 2 — Sections 5–8 + Scoring + Executive Summary + Follow-up Actions
+const EXEC_SUMMARY_PART2_PROMPT = `${EXEC_ANALYSIS_CONTEXT}
+
+Analyse these 4 dimensions, then score and summarise:
+
+5. Customer Questions, Objections & Responses
+- List every customer question from the transcript
+- For each: category (product-capability | use-case-fit | pricing-roi | competition | implementation | security-infosec), brief summary of response given, response quality (complete | partial | deflected | unanswered), urgency if unresolved (now | defer)
+
+6. InfoSec / Deployment Deep Dive
+- Extract all mentions of: security concerns, data privacy, deployment model (browser extension, JS embed, on-prem, cloud, etc.), compliance requirements (GDPR, ISO 27001, SOC 2, etc.)
+- Evaluate how well each was handled given the stage of the deal
+- Which were reasonably deferred vs real deal risks needing follow-up soon?
+
+7. Gaps & Missed Opportunities
+- Where did the demo lack personalization, miss feature->value links, fail to highlight differentiation, lose narrative control, or have technical/positioning/storytelling gaps?
+- Separately: genuine misses in this call vs acceptable topics for later
+
+8. Opportunities & Improvements
+- What could have been done better: flow, differentiation, feature-value mapping, use case anchoring, customer handling
+- What additional capabilities for next calls, what to avoid, suggested next best actions
+
+Then produce scores, executive summary, and follow-up actions.
+
+OUTPUT FORMAT:
+Return ONLY valid JSON, no markdown fences, no preamble:
+{
+  "questions": [
+    {
+      "question": "The exact customer question or objection",
+      "category": "product-capability | use-case-fit | pricing-roi | competition | implementation | security-infosec",
+      "response": "Brief summary of how it was answered",
+      "quality": "complete | partial | deflected | unanswered",
+      "urgency": "now | defer"
+    }
+  ],
+  "infosec": "Markdown prose. Use ### sub-headers and - bullets. Max 100 words.",
+  "gaps": "Markdown prose. Use ### sub-headers and - bullets. Max 150 words.",
+  "improvements": "Markdown prose. Use ### sub-headers and - bullets. Max 150 words.",
   "scores": {
-    "storytellingFlow":       { "score": 4, "rationale": "One sentence justification." },
-    "useCaseAlignment":       { "score": 3, "rationale": "One sentence justification." },
-    "featureValueMapping":    { "score": 4, "rationale": "One sentence justification." },
-    "differentiationClarity": { "score": 3, "rationale": "One sentence justification." },
-    "objectionHandling":      { "score": 4, "rationale": "One sentence justification." },
-    "overallEffectiveness":   { "score": 4, "rationale": "One sentence justification." }
+    "storytellingFlow":       { "score": 4, "rationale": "One sentence." },
+    "useCaseAlignment":       { "score": 3, "rationale": "One sentence." },
+    "featureValueMapping":    { "score": 4, "rationale": "One sentence." },
+    "differentiationClarity": { "score": 3, "rationale": "One sentence." },
+    "objectionHandling":      { "score": 4, "rationale": "One sentence." },
+    "overallEffectiveness":   { "score": 4, "rationale": "One sentence." }
   },
   "executiveSummary": [
     "Customer intent: ...",
@@ -569,7 +645,7 @@ Return ONLY valid JSON, no markdown fences, no preamble:
     "Deal momentum: ..."
   ],
   "followUpActions": [
-    "Action 1 — focused on closing unanswered questions",
+    "Action 1 — closing unanswered questions",
     "Action 2 — addressing InfoSec / deployment concerns",
     "Action 3 — strengthening differentiation in later calls",
     "Action 4 — defining POC / pilot or next demo scope",
@@ -578,24 +654,36 @@ Return ONLY valid JSON, no markdown fences, no preamble:
 }
 
 Rules:
-- All 8 section values must be properly formatted markdown strings with - bullet points and ### sub-headers.
-- Add timestamps for major points wherever possible (e.g. [~5:20]).
-- scores: integers 1-5 only. Score with the correct lens for an early-stage / first call.
-- executiveSummary: exactly 5 bullets covering intent, strengths, risks, differentiation, deal momentum.
-- followUpActions: exactly 5 specific, actionable, commercially sharp follow-ups.
-- Write in plain business English. Be concise, structured, and commercially sharp.
-- Do not use any emoji, checkmarks, cross marks, tick symbols, or special Unicode symbols anywhere in the output. Plain text only.
-- CONSISTENCY RULE: Given the same transcript, always produce identical analysis, scores, and text across runs.`;
+- questions: array of objects, max 15 entries (most significant only). No markdown inside fields.
+- infosec, gaps, improvements: markdown strings, max word limits above.
+- scores: integers 1-5 only.
+- executiveSummary: exactly 5 bullets, max 30 words each.
+- followUpActions: exactly 5 items, max 30 words each, specific and actionable.
+- Do not use any emoji, checkmarks, cross marks, tick symbols, or special Unicode symbols. Plain text only.
+- CONSISTENCY RULE: Given the same transcript, always produce identical output across runs.`;
 
-export function buildExecSummaryRequestBody(transcript) {
+export function buildExecSummaryPart1Body(transcript) {
   return {
-    model: 'claude-sonnet-4-6',
-    max_tokens: 8192,
+    model: 'claude-haiku-4-5-20251001',
+    max_tokens: 6000,
     temperature: 0,
-    system: EXEC_SUMMARY_SYSTEM_PROMPT,
+    system: EXEC_SUMMARY_PART1_PROMPT,
     messages: [{
       role: 'user',
-      content: `Transcript:\n${transcript}\n\nGenerate the comprehensive executive demo analysis. Return JSON only.`,
+      content: `Transcript:\n${transcript}\n\nAnalyse sections 1-4 only. Return JSON only.`,
+    }],
+  };
+}
+
+export function buildExecSummaryPart2Body(transcript) {
+  return {
+    model: 'claude-haiku-4-5-20251001',
+    max_tokens: 6000,
+    temperature: 0,
+    system: EXEC_SUMMARY_PART2_PROMPT,
+    messages: [{
+      role: 'user',
+      content: `Transcript:\n${transcript}\n\nAnalyse sections 5-8, produce scores, executive summary, and follow-up actions. Return JSON only.`,
     }],
   };
 }

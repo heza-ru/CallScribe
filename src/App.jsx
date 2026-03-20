@@ -28,6 +28,7 @@ const initialState = {
   mom:              null,   // null | 'loading' | { internal, external }
   demoScope:        null,   // null | 'loading' | { callStage, prospect, pocScope, recommendations, summary }
   execSummary:      null,   // null | 'loading' | { storyline, useCases, ... }
+  execSummaryError: null,  // null | string
   chatMessages:     [],
   draftTicket:      null,
   settings:         null,
@@ -85,14 +86,14 @@ function reducer(state, action) {
     case 'DEMO_SCOPE_LOADING':     return { ...state, demoScope: 'loading' };
     case 'DEMO_SCOPE_LOADED':      return { ...state, demoScope: action.demoScope };
     case 'DEMO_SCOPE_FAILED':      return { ...state, demoScope: null };
-    case 'EXEC_SUMMARY_LOADING':   return { ...state, execSummary: 'loading' };
-    case 'EXEC_SUMMARY_LOADED':    return { ...state, execSummary: action.execSummary };
-    case 'EXEC_SUMMARY_FAILED':    return { ...state, execSummary: null };
+    case 'EXEC_SUMMARY_LOADING':   return { ...state, execSummary: 'loading', execSummaryError: null };
+    case 'EXEC_SUMMARY_LOADED':    return { ...state, execSummary: action.execSummary, execSummaryError: null };
+    case 'EXEC_SUMMARY_FAILED':    return { ...state, execSummary: null, execSummaryError: action.error || 'Analysis failed. Please try again.' };
     case 'CHAT_ADD_MESSAGE':       return { ...state, chatMessages: [...state.chatMessages, action.message] };
     case 'CHAT_UPDATE_LAST':       return { ...state, chatMessages: [...state.chatMessages.slice(0, -1), action.message] };
     case 'CHAT_CLEAR':             return { ...state, chatMessages: [] };
     case 'RESET_ANALYSIS':
-      return { ...state, insights: [], _insightsRan: false, callIntelligence: null, competitors: null, objections: null, mom: null, demoScope: null, execSummary: null, chunks: null, transcript: null, draftTicket: null };
+      return { ...state, insights: [], _insightsRan: false, callIntelligence: null, competitors: null, objections: null, mom: null, demoScope: null, execSummary: null, execSummaryError: null, chunks: null, transcript: null, draftTicket: null };
     default:
       return state;
   }

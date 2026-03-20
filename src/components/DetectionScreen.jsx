@@ -236,7 +236,7 @@ export function DetectionScreen({ state, dispatch }) {
       dispatch({ type: 'SET_SCREEN', screen: SCREENS.EXEC_SUMMARY });
       generateExecSummary(transcript, state.meetingId, state.settings?.claudeApiKey)
         .then(result => dispatch({ type: 'EXEC_SUMMARY_LOADED', execSummary: result }))
-        .catch(() => dispatch({ type: 'EXEC_SUMMARY_FAILED' }));
+        .catch(err => dispatch({ type: 'EXEC_SUMMARY_FAILED', error: err.message }));
     } catch (err) {
       dispatch({ type: 'SET_ERROR', error: err.message });
       setBusyOp(null);

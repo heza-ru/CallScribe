@@ -25,15 +25,37 @@ const SCORE_KEYS = [
 ];
 
 const SECTION_DEFS = [
-  { key: 'storyline',           title: 'Demo Storyline & Flow',                      tab: 'demo'  },
-  { key: 'useCases',            title: 'Use Cases & Product Positioning',             tab: 'demo'  },
-  { key: 'featureDemoQuality',  title: 'Feature Demonstration Quality',               tab: 'demo'  },
-  { key: 'differentiation',     title: 'Whatfix Differentiation Analysis',            tab: 'risks' },
-  { key: 'questionsObjections', title: 'Customer Questions, Objections & Responses',  tab: 'risks' },
-  { key: 'infosec',             title: 'InfoSec / Deployment Deep Dive',              tab: 'risks' },
-  { key: 'gaps',                title: 'Gaps & Missed Opportunities',                 tab: 'risks' },
-  { key: 'improvements',        title: 'Opportunities & Improvements',                tab: 'next'  },
+  { key: 'storyline',  title: 'Demo Storyline & Flow',        tab: 'demo'  },
+  { key: 'useCases',   title: 'Use Cases & Product Positioning', tab: 'demo'  },
+  { key: 'infosec',    title: 'InfoSec / Deployment Deep Dive',  tab: 'risks' },
+  { key: 'gaps',       title: 'Gaps & Missed Opportunities',     tab: 'risks' },
+  { key: 'improvements', title: 'Opportunities & Improvements',  tab: 'next'  },
 ];
+
+const QUALITY_COLORS = { strong: '#16a34a', moderate: '#d97706', weak: '#dc2626' };
+const QUALITY_BG     = { strong: '#f0fdf4', moderate: '#fffbeb', weak: '#fef2f2' };
+const QUALITY_BORDER = { strong: '#bbf7d0', moderate: '#fde68a', weak: '#fecaca' };
+
+const Q_CATEGORY_LABELS = {
+  'product-capability': 'Product',
+  'use-case-fit':       'Use Case',
+  'pricing-roi':        'Pricing / ROI',
+  'competition':        'Competition',
+  'implementation':     'Implementation',
+  'security-infosec':   'Security',
+};
+const Q_CATEGORY_COLORS = {
+  'product-capability': '#2563eb',
+  'use-case-fit':       '#7c3aed',
+  'pricing-roi':        '#d97706',
+  'competition':        '#dc2626',
+  'implementation':     '#0891b2',
+  'security-infosec':   '#16a34a',
+};
+const Q_QUALITY_COLORS = { complete: '#16a34a', partial: '#d97706', deflected: '#f97316', unanswered: '#dc2626' };
+
+const DIFF_RATING_COLORS = { strong: '#15803d', moderate: '#d97706', weak: '#dc2626', 'intentionally light': '#6B7A8D' };
+const DIFF_RATING_BG     = { strong: '#dcfce7', moderate: '#fef9c3', weak: '#fee2e2', 'intentionally light': '#F5F7FA' };
 
 const TABS = [
   { key: 'summary', label: 'Summary'    },
@@ -261,6 +283,187 @@ function SectionBlock({ title, content }) {
   );
 }
 
+function FeatureCards({ features }) {
+  if (!features?.length) return null;
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+      {features.map((f, i) => {
+        const color  = QUALITY_COLORS[f.quality]  || '#6B7A8D';
+        const bg     = QUALITY_BG[f.quality]      || '#F5F7FA';
+        const border = QUALITY_BORDER[f.quality]  || '#E4E9F0';
+        return (
+          <div key={i} style={{
+            background: bg, borderRadius: 8,
+            border: `1px solid ${border}`,
+            borderLeft: `3px solid ${color}`,
+            padding: '9px 12px',
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+              <div style={{ minWidth: 0 }}>
+                <span style={{ fontSize: 12, fontWeight: 700, color: NAVY }}>{f.name}</span>
+                {f.module && (
+                  <span style={{
+                    marginLeft: 7, fontSize: 9, fontWeight: 700, color: '#fff',
+                    background: '#A8B4C0', padding: '1px 6px', borderRadius: 3,
+                    textTransform: 'uppercase', letterSpacing: '0.04em',
+                  }}>
+                    {f.module}
+                  </span>
+                )}
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                {f.valueArticulated && (
+                  <span style={{ fontSize: 9, fontWeight: 700, color: '#16a34a', background: '#dcfce7', padding: '1px 6px', borderRadius: 3, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                    Value articulated
+                  </span>
+                )}
+                <span style={{ fontSize: 9, fontWeight: 700, color, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  {f.quality}
+                </span>
+              </div>
+            </div>
+            {f.useCase && (
+              <div style={{ fontSize: 11, color: '#6B7A8D', marginTop: 4, lineHeight: 1.5 }}>
+                {f.useCase}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function DifferentiationBlock({ data }) {
+  if (!data) return null;
+  const ratingColor = DIFF_RATING_COLORS[data.overallRating] || '#6B7A8D';
+  const ratingBg    = DIFF_RATING_BG[data.overallRating]    || '#F5F7FA';
+
+  function VerdictPill({ label, value }) {
+    if (!value) return null;
+    const color = value === 'strong' ? '#15803d' : value === 'light' ? '#d97706' : '#6B7A8D';
+    const bg    = value === 'strong' ? '#dcfce7' : value === 'light' ? '#fef9c3' : '#F5F7FA';
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '7px 12px', background: bg, borderRadius: 8, border: `1px solid rgba(0,0,0,0.06)` }}>
+        <span style={{ fontSize: 9, fontWeight: 700, color: '#8A97A8', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 2 }}>{label}</span>
+        <span style={{ fontSize: 11, fontWeight: 800, color, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{value}</span>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      {/* Verdict row */}
+      <div style={{ display: 'flex', gap: 8 }}>
+        <VerdictPill label="Why Whatfix?" value={data.whyWhatfix} />
+        <VerdictPill label="vs Others?"   value={data.vsOthers} />
+        {data.overallRating && (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '7px 12px', background: ratingBg, borderRadius: 8, border: `1px solid rgba(0,0,0,0.06)` }}>
+            <span style={{ fontSize: 9, fontWeight: 700, color: '#8A97A8', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 2 }}>Overall</span>
+            <span style={{ fontSize: 11, fontWeight: 800, color: ratingColor, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{data.overallRating}</span>
+          </div>
+        )}
+      </div>
+
+      {/* Differentiators shown */}
+      {data.shown?.length > 0 && (
+        <div>
+          <div style={{ fontSize: 9.5, fontWeight: 700, color: '#8A97A8', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 6 }}>
+            Differentiators Presented
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {data.shown.map((d, i) => (
+              <div key={i} style={{ background: '#fff', border: '1px solid #E4E9F0', borderRadius: 7, padding: '8px 11px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+                <span style={{ fontSize: 12, color: '#4B5A6D', lineHeight: 1.55 }}>{d.differentiator}</span>
+                <span style={{
+                  fontSize: 9, fontWeight: 700, flexShrink: 0, marginTop: 1,
+                  color: d.positioning === 'pain-led' ? '#16a34a' : d.positioning === 'both' ? '#2563eb' : '#d97706',
+                  textTransform: 'uppercase', letterSpacing: '0.04em',
+                }}>
+                  {d.positioning}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Missed — could introduce now */}
+      {data.missedNow?.length > 0 && (
+        <div>
+          <div style={{ fontSize: 9.5, fontWeight: 700, color: '#d97706', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 6 }}>
+            Could Have Introduced
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+            {data.missedNow.map((d, i) => (
+              <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                <div style={{ width: 2, height: 12, background: '#d97706', borderRadius: 1, flexShrink: 0, marginTop: 4 }} />
+                <span style={{ fontSize: 12, color: '#4B5A6D', lineHeight: 1.6 }}>{d}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Save for later */}
+      {data.saveLater?.length > 0 && (
+        <div>
+          <div style={{ fontSize: 9.5, fontWeight: 700, color: '#6B7A8D', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 6 }}>
+            Save for Later
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+            {data.saveLater.map((d, i) => (
+              <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                <div style={{ width: 2, height: 12, background: '#C8D2DE', borderRadius: 1, flexShrink: 0, marginTop: 4 }} />
+                <span style={{ fontSize: 12, color: '#6B7A8D', lineHeight: 1.6 }}>{d}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function QACards({ questions }) {
+  if (!questions?.length) return (
+    <div style={{ fontSize: 12, color: '#8A97A8', fontStyle: 'italic' }}>No customer questions recorded.</div>
+  );
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      {questions.map((q, i) => {
+        const catColor  = Q_CATEGORY_COLORS[q.category] || '#6B7A8D';
+        const qualColor = Q_QUALITY_COLORS[q.quality]   || '#6B7A8D';
+        return (
+          <div key={i} style={{ background: '#fff', border: '1px solid #E4E9F0', borderRadius: 8, padding: '10px 13px' }}>
+            <div style={{ display: 'flex', gap: 5, marginBottom: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+              <span style={{ fontSize: 9, fontWeight: 700, color: '#fff', background: catColor, padding: '2px 7px', borderRadius: 4, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                {Q_CATEGORY_LABELS[q.category] || q.category}
+              </span>
+              <span style={{ fontSize: 9, fontWeight: 700, color: qualColor, border: `1px solid ${qualColor}`, padding: '1px 6px', borderRadius: 4, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                {q.quality}
+              </span>
+              {q.urgency === 'now' && (
+                <span style={{ fontSize: 9, fontWeight: 700, color: '#dc2626', background: '#fef2f2', border: '1px solid #fecaca', padding: '1px 6px', borderRadius: 4, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                  Address Now
+                </span>
+              )}
+            </div>
+            <div style={{ fontSize: 12, fontWeight: 600, color: NAVY, lineHeight: 1.55, marginBottom: q.response ? 5 : 0 }}>
+              {q.question}
+            </div>
+            {q.response && (
+              <div style={{ fontSize: 11, color: '#6B7A8D', lineHeight: 1.55 }}>
+                {q.response}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // ── Tabs ──────────────────────────────────────────────────────────
 
 function SummaryTab({ data }) {
@@ -360,26 +563,68 @@ function SummaryTab({ data }) {
   );
 }
 
-function ContentTab({ data, tabKey }) {
+function DemoTab({ data }) {
   const tabRef = useRef(null);
-  const sections = SECTION_DEFS.filter(s => s.tab === tabKey);
-
   useLayoutEffect(() => {
     if (!tabRef.current) return;
     const ctx = gsap.context(() => {
-      gsap.fromTo('.cs-exec-section',
-        { opacity: 0, y: 14 },
-        { opacity: 1, y: 0, duration: 0.4, ease: 'power2.out', stagger: 0.07, clearProps: 'transform,opacity' }
-      );
+      gsap.fromTo('.cs-exec-section', { opacity: 0, y: 14 }, { opacity: 1, y: 0, duration: 0.4, ease: 'power2.out', stagger: 0.07, clearProps: 'transform,opacity' });
     }, tabRef);
     return () => ctx.revert();
-  }, [tabKey]);
+  }, []);
 
   return (
     <div ref={tabRef} style={{ flex: 1, overflowY: 'auto', padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
-      {sections.map(({ key, title }) => (
-        <SectionBlock key={key} title={title} content={data[key]} />
-      ))}
+      <SectionBlock title="Demo Storyline & Flow" content={data.storyline} />
+      <SectionBlock title="Use Cases & Product Positioning" content={data.useCases} />
+      {data.features?.length > 0 && (
+        <div className="cs-exec-section" style={{ background: '#fff', borderRadius: 10, border: '1px solid #E4E9F0', padding: '14px 16px' }}>
+          <div style={{ fontSize: 10, fontWeight: 800, color: NAVY, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 12, paddingBottom: 8, borderBottom: `2px solid ${ORANGE}`, display: 'inline-block' }}>
+            Feature Demonstration Quality
+          </div>
+          <div style={{ marginTop: 10 }}>
+            <FeatureCards features={data.features} />
+          </div>
+        </div>
+      )}
+      {data.differentiation && (
+        <div className="cs-exec-section" style={{ background: '#fff', borderRadius: 10, border: '1px solid #E4E9F0', padding: '14px 16px' }}>
+          <div style={{ fontSize: 10, fontWeight: 800, color: NAVY, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 12, paddingBottom: 8, borderBottom: `2px solid ${ORANGE}`, display: 'inline-block' }}>
+            Whatfix Differentiation Analysis
+          </div>
+          <div style={{ marginTop: 10 }}>
+            <DifferentiationBlock data={data.differentiation} />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function RisksTab({ data }) {
+  const tabRef = useRef(null);
+  useLayoutEffect(() => {
+    if (!tabRef.current) return;
+    const ctx = gsap.context(() => {
+      gsap.fromTo('.cs-exec-section', { opacity: 0, y: 14 }, { opacity: 1, y: 0, duration: 0.4, ease: 'power2.out', stagger: 0.07, clearProps: 'transform,opacity' });
+    }, tabRef);
+    return () => ctx.revert();
+  }, []);
+
+  return (
+    <div ref={tabRef} style={{ flex: 1, overflowY: 'auto', padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+      {data.questions?.length > 0 && (
+        <div className="cs-exec-section" style={{ background: '#fff', borderRadius: 10, border: '1px solid #E4E9F0', padding: '14px 16px' }}>
+          <div style={{ fontSize: 10, fontWeight: 800, color: NAVY, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 12, paddingBottom: 8, borderBottom: `2px solid ${ORANGE}`, display: 'inline-block' }}>
+            Customer Questions, Objections & Responses
+          </div>
+          <div style={{ marginTop: 10 }}>
+            <QACards questions={data.questions} />
+          </div>
+        </div>
+      )}
+      <SectionBlock title="InfoSec / Deployment Deep Dive" content={data.infosec} />
+      <SectionBlock title="Gaps & Missed Opportunities" content={data.gaps} />
     </div>
   );
 }
@@ -609,12 +854,13 @@ export function ExecSummaryScreen({ state, dispatch }) {
               Generate a comprehensive exec summary covering storyline, differentiation, risks, and follow-up actions.
             </div>
           </div>
-          {error && (
+          {(error || state.execSummaryError) && (
             <div style={{
               background: '#fef2f2', color: '#dc2626', fontSize: 11.5,
-              padding: '9px 12px', borderRadius: 7, border: '1px solid #fecaca', maxWidth: 260,
+              padding: '9px 12px', borderRadius: 7, border: '1px solid #fecaca', maxWidth: 280,
+              lineHeight: 1.55,
             }}>
-              {error}
+              {error || state.execSummaryError}
             </div>
           )}
           {state.transcript && (
@@ -746,8 +992,8 @@ export function ExecSummaryScreen({ state, dispatch }) {
       {/* Tab content */}
       <div key={tab} style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', animation: 'tabEnter 200ms cubic-bezier(0.22,1,0.36,1) both' }}>
         {tab === 'summary' && <SummaryTab data={data} />}
-        {tab === 'demo'    && <ContentTab data={data} tabKey="demo" />}
-        {tab === 'risks'   && <ContentTab data={data} tabKey="risks" />}
+        {tab === 'demo'    && <DemoTab data={data} />}
+        {tab === 'risks'   && <RisksTab data={data} />}
         {tab === 'next'    && <NextStepsTab data={data} onReanalyze={runAnalysis} reanalyzing={reanalyzing} />}
       </div>
     </div>

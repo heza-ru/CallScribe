@@ -90,9 +90,18 @@ export function TranscriptActions({ state, dispatch }) {
         if (!spkSet.has(s)) { spkSet.add(s); spk.push(s); }
       }
     });
-    const mins = Math.max(1, Math.round(words.length / 130));
+    // Derive duration from actual chunk timestamps when available
+    const chunks = state.chunks;
+    let mins = Math.max(1, Math.round(words.length / 130));
+    if (Array.isArray(chunks) && chunks.length > 0) {
+      const lastChunk = chunks[chunks.length - 1];
+      const endSec = lastChunk.endTime ?? lastChunk.end ?? null;
+      if (endSec != null && endSec > 0) {
+        mins = Math.max(1, Math.round(endSec / 60));
+      }
+    }
     return { wordCount: words.length, blocks: groupLines(rawLines), speakers: spk, estimatedMins: mins };
-  }, [state.transcript]);
+  }, [state.transcript, state.chunks]);
 
   async function handleAnalyze() {
     setError(null);
