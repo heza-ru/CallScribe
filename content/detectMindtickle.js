@@ -8,12 +8,9 @@
 
   function getCallTitle() {
     try {
-      const el = document.querySelector('[data-testid="text-recording-title"]');
+      const el = document.querySelector('[data-testid="text-recording-title"] div[aria-label]');
       if (!el) return null;
-      // Prefer aria-label on inner div (handles HTML entities cleanly)
-      const inner = el.querySelector('[aria-label]');
-      const raw = inner?.getAttribute('aria-label') || el.textContent;
-      return raw?.trim() || null;
+      return el.getAttribute('aria-label')?.trim() || el.textContent?.trim() || null;
     } catch {
       return null;
     }

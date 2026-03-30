@@ -4,6 +4,8 @@ import {
   buildMOMRequestBody, buildChatRequestBody,
   buildDemoScopeRequestBody,
   buildExecSummaryPart1Body, buildExecSummaryPart2Body,
+  buildSolutionFrameworkRecommendationBody,
+  buildSolutionFrameworkAnalysisBody,
 } from '../utils/promptBuilder';
 import { DEMO_ENVIRONMENTS } from '../data/demoEnvironments';
 import { compressTranscript } from '../utils/transcriptCompressor';
@@ -366,6 +368,58 @@ export async function generateExecSummary(transcript, meetingId, apiKey) {
     throw e;
   } finally {
     clearTimeout(timeout);
+  }
+}
+
+// ─── Solution Framework ───────────────────────────────────────────
+
+export async function getSolutionFrameworkRecommendation(transcript, apiKey) {
+  if (!apiKey) throw new Error('Claude API key is not configured.');
+  const { text: compressed } = compressTranscript(transcript);
+  const body = buildSolutionFrameworkRecommendationBody(compressed);
+  const response = await claudeFetch(body, apiKey);
+  const data = await response.json();
+  const raw = data?.content?.[0]?.text;
+  if (!raw) throw new Error('Empty response from Claude API');
+  recordTokens('solution_framework', data.usage?.input_tokens, data.usage?.output_tokens).catch(() => {});
+  try {
+    const parsed = extractJSONObject(raw);
+    return {
+      type: parsed.type || 'DT',
+      confidence: parsed.confidence || 'low',
+      reason: parsed.reason || '',
+      alternativeType: parsed.alternativeType || null,
+      alternativeReason: parsed.alternativeReason || null,
+    };
+  } catch (e) {
+    throw new Error('Failed to parse framework recommendation: ' + e.message);
+  }
+}
+
+export async function analyzeSolutionFramework(transcript, frameworkType, apiKey) {
+  if (!apiKey) throw new Error('Claude API key is not configured.');
+  const { text: compressed } = compressTranscript(transcript);
+  const body = buildSolutionFrameworkAnalysisBody(compressed, frameworkType);
+  const response = await claudeFetch(body, apiKey);
+  const data = await response.json();
+  const raw = data?.content?.[0]?.text;
+  if (!raw) throw new Error('Empty response from Claude API');
+  recordTokens('solution_framework', data.usage?.input_tokens, data.usage?.output_tokens).catch(() => {});
+  try {
+    const parsed = extractJSONObject(raw);
+    return {
+      overallFit: parsed.overallFit || 'moderate',
+      fitReason: parsed.fitReason || '',
+      qualificationSignals: Array.isArray(parsed.qualificationSignals) ? parsed.qualificationSignals : [],
+      discoveryGaps: Array.isArray(parsed.discoveryGaps) ? parsed.discoveryGaps : [],
+      requirementMapping: Array.isArray(parsed.requirementMapping) ? parsed.requirementMapping : [],
+      competitiveContext: parsed.competitiveContext || '',
+      objections: Array.isArray(parsed.objections) ? parsed.objections : [],
+      roiAngles: Array.isArray(parsed.roiAngles) ? parsed.roiAngles : [],
+      demoFocus: parsed.demoFocus || '',
+    };
+  } catch (e) {
+    throw new Error('Failed to parse framework analysis: ' + e.message);
   }
 }
 

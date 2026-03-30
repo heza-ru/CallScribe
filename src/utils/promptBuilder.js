@@ -688,6 +688,227 @@ export function buildExecSummaryPart2Body(transcript) {
   };
 }
 
+// ─────────────────────────────────────────────────────────────────
+// Solution Framework — Recommendation + Per-Framework Analysis
+// ─────────────────────────────────────────────────────────────────
+
+const SOLUTION_FRAMEWORK_RECOMMENDATION_PROMPT = `You are a Whatfix SC specialist. Given a sales call transcript, determine which Whatfix solution framework best fits the opportunity.
+
+The three frameworks are:
+- MRP (Mirror Roleplay Practice): For contact center / agent training opportunities. Signals: mentions of agent performance, AHT, FCR, CSAT, call center training, roleplay, coaching, customer service ramp-up, simulation.
+- DT (Digital Transformation): For new digital adoption opportunities where no DAP exists. Signals: new ERP/CRM/HRMS rollout, user adoption challenges, change management, training costs, no existing DAP, slow adoption of software.
+- CD (Competitive Displacement): For opportunities where another DAP is already deployed. Signals: mentions of WalkMe, Pendo, Appcues, Userlane, existing DAP, current adoption tool, switching from competitor.
+
+Return ONLY valid JSON, no markdown fences:
+{
+  "type": "MRP" | "DT" | "CD",
+  "confidence": "high" | "medium" | "low",
+  "reason": "2 sentences explaining why this framework fits best based on specific signals from the call",
+  "alternativeType": "MRP" | "DT" | "CD" | null,
+  "alternativeReason": "1 sentence on why the alternative could also apply, or null"
+}
+
+Rules:
+- Base decision on explicit signals in the transcript, not assumptions
+- If transcript is ambiguous, default to DT with low confidence
+- CONSISTENCY RULE: Given the same transcript, always return the same result`;
+
+export function buildSolutionFrameworkRecommendationBody(transcript) {
+  return {
+    model: 'claude-haiku-4-5-20251001',
+    max_tokens: 512,
+    temperature: 0,
+    system: SOLUTION_FRAMEWORK_RECOMMENDATION_PROMPT,
+    messages: [{
+      role: 'user',
+      content: `Transcript:\n${transcript}\n\nIdentify the best-fit Whatfix solution framework and return JSON.`,
+    }],
+  };
+}
+
+const MRP_FRAMEWORK_CONTEXT = `## MRP (Mirror Roleplay Practice) Framework
+
+### Qualification Signals
+- Low FCR / CSAT and high AHT for new or ramping agents
+- Heavy reliance on manual training / classroom roleplays
+- Lack of sandbox or safe training environment
+- Limited visibility into agent behavior in conversations and application friction
+- Coaching is subjective and inconsistent
+
+### Key Capabilities to Validate
+- Human-like AI that handles interruptions, tone shifts, anger
+- Realistic simulation of real-life scenarios end-to-end
+- Replicated CRM/UI environment (e.g., Sprinklr, Salesforce)
+- Automated and objective scoring with standardized rubrics
+- Dual-layer analytics: conversation readiness + application friction
+- AI-assisted roleplay creation (15–20 minutes)
+- Multimodal roleplay: Voice and Chat
+- Automated language translation
+- Hierarchical insights by role, department, geography
+
+### Core Whatfix Differentiators
+1. Unified Simulation + Roleplay (conversation + application workflow together)
+2. AI-Driven Roleplay Creation (AI Copilot, 15–20 mins)
+3. Automated & Objective Scoring (removes subjectivity)
+4. Dual-Layer Analytics (conversation readiness + application friction)
+5. Multimodal Roleplay (Voice and Chat)
+6. Overlaid Guidance Agent in flow of work
+
+### ROI Levers
+- Reduce AHT via faster agent familiarity with workflows
+- Increase FCR through better handling of real scenarios
+- Improve CSAT via better conversation quality
+- Reduce trainer dependency and scale without headcount
+- Standardized scoring and data-driven coaching
+
+### Common Objections
+- "AI won't feel realistic" → Showcase interruption handling + emotional variation
+- "We already do roleplays" → Highlight lack of scalability & objectivity
+- "Too complex to set up" → Emphasize AI-assisted creation (15–20 mins)
+- "We have training tools" → Position unified experience vs fragmented stack`;
+
+const DT_FRAMEWORK_CONTEXT = `## DT (Digital Transformation) Framework
+
+### Qualification Signals
+- High dependency on IT for simple UI/process changes
+- Slow user adoption of new digital tools (CRM, ERP, HRMS, etc.)
+- Frequent process deviations or non-compliance by users
+- High training costs with low retention of knowledge
+- Fragmented user experience across multiple applications
+- Lack of visibility into user journeys, drop-offs, feature adoption gaps
+- Change management challenges during system rollouts
+- Increase in support tickets / helpdesk queries for basic tasks
+
+### Key Capabilities to Validate
+- In-app, contextual guidance at the point of need
+- Cross-application workflow support
+- No-code content creation (business teams, no IT)
+- Analytics and user behavior insights
+- Self-service support (help widget, FAQs, search)
+- Personalization by role, persona, or context
+
+### Core Whatfix Differentiators
+1. In-App, Contextual Guidance (step-by-step, moment of need)
+2. Cross-Application Digital Adoption (seamless multi-system workflows)
+3. No-Code Content Creation (business-owned, no engineering)
+4. Self-Help & Smart Support (reduces support tickets significantly)
+5. Advanced Product Analytics (friction points, underutilized features)
+6. Personalized Experiences (role-based, contextual, dynamic)
+7. Enterprise-Grade Scalability (multiple systems and geographies)
+
+### ROI Levers
+- Reduce task completion time
+- Decrease support tickets
+- Improve process compliance and feature adoption
+- Reduce classroom training dependency
+- Lower onboarding time for new users
+- Faster ROI on digital transformation investments
+
+### Common Objections
+- "We already have training programs" → Training is static; Whatfix enables real-time, contextual learning
+- "Users should already know the system" → Even trained users need guidance during complex workflows
+- "Implementation will be complex" → No-code platform enables rapid deployment
+- "We have analytics tools" → Whatfix provides workflow-level insights, not just page views
+- "This overlaps with existing tools" → Whatfix complements and enhances existing systems`;
+
+const CD_FRAMEWORK_CONTEXT = `## CD (Competitive Displacement) Framework
+
+### Qualification Signals
+- Existing DAP (WalkMe, Pendo, Userlane, Appcues) is deployed but underutilized
+- Low engagement with current in-app guidance (walkthroughs rarely used)
+- High effort required to create or maintain content
+- Heavy dependency on IT/vendor for updates
+- Limited or no actionable analytics from the current tool
+- Slow turnaround time for changes or new flows
+- High licensing cost with unclear ROI
+- User complaints about irrelevant/intrusive guidance or poor UI/UX
+- Fragmented capabilities across tools
+
+### Common Competitor Weaknesses
+- WalkMe: High implementation complexity, requires technical expertise, expensive, slower to scale
+- Pendo: Strong analytics but limited in-app guidance depth, not optimized for complex enterprise workflows
+- Userlane/Appcues: Simpler tools, lack enterprise scalability, limited analytics and cross-app capabilities
+
+### Key Capabilities to Validate
+- Ease of use and business-owned (vs IT-heavy)
+- Time-to-value advantage (faster deployment)
+- Actionable analytics vs vanity metrics
+- All-in-one platform vs fragmented stack
+- Non-intrusive, contextual user experience
+- Cross-application capability
+
+### Core Whatfix Differentiators
+1. Zero/Low-Code Platform (rapid creation, no engineering)
+2. Superior Time to Value (go live in weeks, not months)
+3. Actionable Product Analytics (direct insight → action linkage)
+4. Unified Platform (guidance + self-help + analytics in one)
+5. Non-Intrusive User Experience (contextual, relevant)
+6. Cross-Application Capability (end-to-end enterprise workflows)
+7. Lower Total Cost of Ownership (reduced consultant dependency)
+
+### ROI Levers
+- Recover ROI investment by replacing underperforming tool
+- Reduce licensing and maintenance costs
+- Improve actual adoption of the DAP itself
+- Eliminate IT bottlenecks for content updates
+- Better ROI visibility vs existing DAP
+
+### Common Objections
+- "We already have a DAP" → Many customers switch due to low adoption and high complexity
+- "Migration will be difficult" → Phased rollout ensures minimal disruption
+- "We've invested heavily already" → Focus on ROI recovery and long-term efficiency
+- "Our current tool works fine" → Validate with actual adoption and usage data
+- "Switching tools is risky" → Controlled deployment with measurable milestones`;
+
+const FRAMEWORK_CONTEXTS = { MRP: MRP_FRAMEWORK_CONTEXT, DT: DT_FRAMEWORK_CONTEXT, CD: CD_FRAMEWORK_CONTEXT };
+
+const SOLUTION_FRAMEWORK_ANALYSIS_SYSTEM = (frameworkType) => `You are a Whatfix SC specialist analyzing a sales call against the ${frameworkType} solution framework.
+
+${FRAMEWORK_CONTEXTS[frameworkType]}
+
+## YOUR TASK
+Analyze the call transcript against the ${frameworkType} framework above. Be specific — reference actual things said in the call.
+
+Return ONLY valid JSON, no markdown fences:
+{
+  "overallFit": "strong" | "moderate" | "weak",
+  "fitReason": "2 sentences explaining the fit based on specific call evidence",
+  "qualificationSignals": [
+    { "signal": "Signal description from framework", "found": true | false, "evidence": "Quote or paraphrase from call, or null if not found" }
+  ],
+  "discoveryGaps": ["Question or topic that should have been explored but wasn't"],
+  "requirementMapping": [
+    { "pain": "Customer pain identified in call", "capability": "Whatfix ${frameworkType} capability that addresses it", "addressed": true | false }
+  ],
+  "competitiveContext": "1-2 sentences on competitive landscape mentioned in the call, or 'No competitors mentioned'",
+  "objections": [
+    { "objection": "Objection raised or likely to arise", "suggestedResponse": "Recommended response based on framework" }
+  ],
+  "roiAngles": ["Specific ROI talking point relevant to this call"],
+  "demoFocus": "Markdown paragraph: which ${frameworkType} features/scenarios to prioritize in the demo based on this specific call"
+}
+
+Rules:
+- qualificationSignals: include ALL signals from the framework, mark found/not found based on the transcript
+- discoveryGaps: max 5 items, be specific to what was missing from THIS call
+- requirementMapping: only include pains actually mentioned in the call, max 6 items
+- objections: include both raised objections and likely upcoming ones, max 5 items
+- roiAngles: 3-5 items, make them specific to this customer's context
+- CONSISTENCY RULE: Given the same transcript, always produce the same output`;
+
+export function buildSolutionFrameworkAnalysisBody(transcript, frameworkType) {
+  return {
+    model: 'claude-haiku-4-5-20251001',
+    max_tokens: 3000,
+    temperature: 0,
+    system: SOLUTION_FRAMEWORK_ANALYSIS_SYSTEM(frameworkType),
+    messages: [{
+      role: 'user',
+      content: `Transcript:\n${transcript}\n\nAnalyze this call against the ${frameworkType} framework and return JSON.`,
+    }],
+  };
+}
+
 export function buildChatRequestBody(transcript, messages) {
   return {
     model: 'claude-haiku-4-5-20251001',

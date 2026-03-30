@@ -3,7 +3,7 @@ import {
   AlertTriangle, CheckCircle2, Loader2,
   ArrowRight, RefreshCw, Settings,
   Info, RotateCcw, FileText, ListChecks, BarChart2,
-  ClipboardList, MessageCircle, Target, PackageOpen, BookOpen,
+  ClipboardList, MessageCircle, Target, PackageOpen, BookOpen, Compass,
 } from 'lucide-react';
 import { SCREENS } from '../constants';
 import { parseChunks } from '../utils/mindtickleParser';
@@ -243,6 +243,20 @@ export function DetectionScreen({ state, dispatch }) {
     }
   }
 
+  // Solution Framework
+  async function handleSolutionFramework() {
+    setBusyOp('solution_framework');
+    dispatch({ type: 'CLEAR_ERROR' });
+    try {
+      await ensureTranscript();
+      dispatch({ type: 'SET_SCREEN', screen: SCREENS.SOLUTION_FRAMEWORK });
+    } catch (err) {
+      dispatch({ type: 'SET_ERROR', error: err.message });
+    } finally {
+      setBusyOp(null);
+    }
+  }
+
   // Chat with Call screen
   async function handleChat() {
     setBusyOp('chat');
@@ -320,7 +334,7 @@ export function DetectionScreen({ state, dispatch }) {
                   <div style={{ fontSize: 11, fontWeight: 700, color: NAVY, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                     Transcript Ready
                   </div>
-                  <div style={{ fontSize: 10, color: '#8A97A8', marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: state.callTitle ? 'var(--font-sans)' : 'monospace' }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: NAVY, marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {state.callTitle || state.meetingId}
                   </div>
                 </div>
@@ -342,7 +356,7 @@ export function DetectionScreen({ state, dispatch }) {
                   <div style={{ fontSize: 11, fontWeight: 700, color: NAVY, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                     Mindtickle Call Detected
                   </div>
-                  <div style={{ fontSize: 10, color: '#8A97A8', marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: state.callTitle ? 'var(--font-sans)' : 'monospace' }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: NAVY, marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {state.callTitle || state.meetingId}
                   </div>
                 </div>
@@ -434,6 +448,13 @@ export function DetectionScreen({ state, dispatch }) {
                 disabled={isBusy}
                 loading={busyOp === 'demo_scope'}
                 onClick={handleDemoScope}
+              />
+              <QuickActionRow
+                icon={Compass}
+                title="Solution Framework"
+                disabled={isBusy}
+                loading={busyOp === 'solution_framework'}
+                onClick={handleSolutionFramework}
               />
             </div>
 

@@ -8,5 +8,6 @@ export const SCREENS = {
   CHAT:               'chat',
   DEMO_SCOPE:         'demo_scope',
   EXEC_SUMMARY:       'exec_summary',
+  SOLUTION_FRAMEWORK: 'solution_framework',
   SETTINGS:           'settings',
 };

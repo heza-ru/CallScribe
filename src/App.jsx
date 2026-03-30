@@ -9,6 +9,7 @@ import { MOMScreen } from './components/MOMScreen';
 import { ChatScreen } from './components/ChatScreen';
 import { DemoScopeScreen } from './components/DemoScopeScreen';
 import { ExecSummaryScreen } from './components/ExecSummaryScreen';
+import { SolutionFrameworkScreen } from './components/SolutionFrameworkScreen';
 import { Settings } from './components/Settings';
 import { SCREENS } from './constants';
 
@@ -30,6 +31,8 @@ const initialState = {
   demoScope:        null,   // null | 'loading' | { callStage, prospect, pocScope, recommendations, summary }
   execSummary:      null,   // null | 'loading' | { storyline, useCases, ... }
   execSummaryError: null,  // null | string
+  solutionFramework: null, // null | 'loading' | { type, confidence, reason, alternativeType, alternativeReason }
+  solutionFrameworkAnalyses: { MRP: null, DT: null, CD: null }, // null | 'loading' | { ...analysis }
   chatMessages:     [],
   draftTicket:      null,
   settings:         null,
@@ -93,11 +96,20 @@ function reducer(state, action) {
     case 'EXEC_SUMMARY_LOADING':   return { ...state, execSummary: 'loading', execSummaryError: null };
     case 'EXEC_SUMMARY_LOADED':    return { ...state, execSummary: action.execSummary, execSummaryError: null };
     case 'EXEC_SUMMARY_FAILED':    return { ...state, execSummary: null, execSummaryError: action.error || 'Analysis failed. Please try again.' };
+    case 'SOLUTION_FRAMEWORK_LOADING': return { ...state, solutionFramework: 'loading' };
+    case 'SOLUTION_FRAMEWORK_LOADED':  return { ...state, solutionFramework: action.data };
+    case 'SOLUTION_FRAMEWORK_FAILED':  return { ...state, solutionFramework: null };
+    case 'SOLUTION_FRAMEWORK_ANALYSIS_LOADING':
+      return { ...state, solutionFrameworkAnalyses: { ...state.solutionFrameworkAnalyses, [action.frameworkType]: 'loading' } };
+    case 'SOLUTION_FRAMEWORK_ANALYSIS_LOADED':
+      return { ...state, solutionFrameworkAnalyses: { ...state.solutionFrameworkAnalyses, [action.frameworkType]: action.data } };
+    case 'SOLUTION_FRAMEWORK_ANALYSIS_FAILED':
+      return { ...state, solutionFrameworkAnalyses: { ...state.solutionFrameworkAnalyses, [action.frameworkType]: null } };
     case 'CHAT_ADD_MESSAGE':       return { ...state, chatMessages: [...state.chatMessages, action.message] };
     case 'CHAT_UPDATE_LAST':       return { ...state, chatMessages: [...state.chatMessages.slice(0, -1), action.message] };
     case 'CHAT_CLEAR':             return { ...state, chatMessages: [] };
     case 'RESET_ANALYSIS':
-      return { ...state, insights: [], _insightsRan: false, callIntelligence: null, competitors: null, objections: null, mom: null, demoScope: null, execSummary: null, execSummaryError: null, chunks: null, transcript: null, draftTicket: null };
+      return { ...state, insights: [], _insightsRan: false, callIntelligence: null, competitors: null, objections: null, mom: null, demoScope: null, execSummary: null, execSummaryError: null, solutionFramework: null, solutionFrameworkAnalyses: { MRP: null, DT: null, CD: null }, chunks: null, transcript: null, draftTicket: null };
     default:
       return state;
   }
@@ -139,9 +151,10 @@ export default function App() {
         {screen === SCREENS.TICKET_REVIEW      && <TicketReview       {...props} />}
         {screen === SCREENS.MOM                && <MOMScreen          {...props} />}
         {screen === SCREENS.DEMO_SCOPE         && <DemoScopeScreen    {...props} />}
-        {screen === SCREENS.EXEC_SUMMARY       && <ExecSummaryScreen  {...props} />}
-        {screen === SCREENS.CHAT               && <ChatScreen         {...props} />}
-        {screen === SCREENS.SETTINGS           && <Settings           {...props} />}
+        {screen === SCREENS.EXEC_SUMMARY       && <ExecSummaryScreen      {...props} />}
+        {screen === SCREENS.SOLUTION_FRAMEWORK && <SolutionFrameworkScreen {...props} />}
+        {screen === SCREENS.CHAT               && <ChatScreen             {...props} />}
+        {screen === SCREENS.SETTINGS           && <Settings               {...props} />}
       </div>
     </AppShell>
   );
