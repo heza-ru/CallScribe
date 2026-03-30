@@ -108,7 +108,7 @@ export function DetectionScreen({ state, dispatch }) {
       chrome.runtime.sendMessage({ type: 'GET_TAB_STATE' }, (res) => {
         if (chrome.runtime.lastError) { setStatus(STATUS.ERROR); return; }
         if (res?.found && res?.meetingId) {
-          dispatch({ type: 'TRANSCRIPT_DETECTED', meetingId: res.meetingId, token: res.token });
+          dispatch({ type: 'TRANSCRIPT_DETECTED', meetingId: res.meetingId, token: res.token, callTitle: res.callTitle ?? null });
           setStatus(STATUS.FOUND);
         } else {
           setStatus(STATUS.NOT_FOUND);
@@ -320,8 +320,8 @@ export function DetectionScreen({ state, dispatch }) {
                   <div style={{ fontSize: 11, fontWeight: 700, color: NAVY, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                     Transcript Ready
                   </div>
-                  <div style={{ fontSize: 10, color: '#8A97A8', marginTop: 1, fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {state.meetingId}
+                  <div style={{ fontSize: 10, color: '#8A97A8', marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: state.callTitle ? 'var(--font-sans)' : 'monospace' }}>
+                    {state.callTitle || state.meetingId}
                   </div>
                 </div>
               </div>
@@ -342,8 +342,8 @@ export function DetectionScreen({ state, dispatch }) {
                   <div style={{ fontSize: 11, fontWeight: 700, color: NAVY, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                     Mindtickle Call Detected
                   </div>
-                  <div style={{ fontSize: 10, color: '#8A97A8', marginTop: 1, fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {state.meetingId}
+                  <div style={{ fontSize: 10, color: '#8A97A8', marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: state.callTitle ? 'var(--font-sans)' : 'monospace' }}>
+                    {state.callTitle || state.meetingId}
                   </div>
                 </div>
               </div>

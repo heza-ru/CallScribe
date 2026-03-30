@@ -17,6 +17,7 @@ export { SCREENS };
 const initialState = {
   screen:           SCREENS.DETECTION,
   meetingId:        null,
+  callTitle:        null,
   token:            null,
   chunks:           null,
   transcript:       null,
@@ -40,9 +41,9 @@ function reducer(state, action) {
     case 'SET_SCREEN':
       return { ...state, screen: action.screen, error: null };
     case 'TRANSCRIPT_DETECTED':
-      // Same call — just refresh the token
+      // Same call — just refresh the token and title
       if (action.meetingId === state.meetingId) {
-        return { ...state, token: action.token, error: null };
+        return { ...state, token: action.token, callTitle: action.callTitle ?? state.callTitle, error: null };
       }
       // New call — wipe all stale analysis data and go back to detection
       return {
@@ -50,8 +51,11 @@ function reducer(state, action) {
         settings: state.settings,
         screen: SCREENS.DETECTION,
         meetingId: action.meetingId,
+        callTitle: action.callTitle ?? null,
         token: action.token,
       };
+    case 'CALL_TITLE_UPDATED':
+      return { ...state, callTitle: action.callTitle };
     case 'TRANSCRIPT_LOADED':
       return { ...state, chunks: action.chunks, transcript: action.transcript, error: null };
     case 'INSIGHTS_LOADED':
@@ -112,8 +116,11 @@ export default function App() {
   // Listen for new call detected while panel is already open
   useEffect(() => {
     function onMessage(msg) {
-      if (msg.type !== 'MEETING_CHANGED') return;
-      dispatch({ type: 'TRANSCRIPT_DETECTED', meetingId: msg.meetingId, token: msg.token });
+      if (msg.type === 'MEETING_CHANGED') {
+        dispatch({ type: 'TRANSCRIPT_DETECTED', meetingId: msg.meetingId, token: msg.token, callTitle: msg.callTitle ?? null });
+      } else if (msg.type === 'CALL_TITLE_UPDATED') {
+        dispatch({ type: 'CALL_TITLE_UPDATED', callTitle: msg.callTitle });
+      }
     }
     chrome.runtime.onMessage.addListener(onMessage);
     return () => chrome.runtime.onMessage.removeListener(onMessage);

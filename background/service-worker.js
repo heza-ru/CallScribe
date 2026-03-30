@@ -3,7 +3,7 @@ chrome.sidePanel
   .setPanelBehavior({ openPanelOnActionClick: true })
   .catch(console.error);
 
-// Per-tab state: { meetingId, token, url }
+// Per-tab state: { meetingId, token, callTitle, url }
 const tabState = new Map();
 
 // Enable/disable the side panel based on whether the tab is a Mindtickle page
@@ -37,15 +37,23 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       tabState.set(tabId, {
         meetingId: message.meetingId,
         token: message.token,
+        callTitle: message.callTitle ?? prev?.callTitle ?? null,
         url: message.url,
       });
-      // Notify the side panel when a different call is detected
+      // Notify the side panel when a different call is detected or title arrives
       if (prev?.meetingId !== message.meetingId) {
         chrome.runtime.sendMessage({
           type: 'MEETING_CHANGED',
           meetingId: message.meetingId,
           token: message.token,
+          callTitle: message.callTitle ?? null,
         }).catch(() => {}); // side panel may not be open — ignore
+      } else if (message.callTitle && message.callTitle !== prev?.callTitle) {
+        // Same call but title just became available — notify panel
+        chrome.runtime.sendMessage({
+          type: 'CALL_TITLE_UPDATED',
+          callTitle: message.callTitle,
+        }).catch(() => {});
       }
       break;
     }
@@ -60,7 +68,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         } else {
           const match = tab.url?.match(/\/recording\/([a-zA-Z0-9_-]+)/);
           if (match) {
-            sendResponse({ found: true, meetingId: match[1], token: null, url: tab.url });
+            sendResponse({ found: true, meetingId: match[1], token: null, callTitle: null, url: tab.url });
           } else {
             sendResponse({ found: false });
           }
