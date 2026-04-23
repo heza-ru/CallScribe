@@ -5,6 +5,7 @@ import { ClipboardList, RefreshCw, Copy, Check, FileText, Users, Download, Chevr
 import { generateMOM } from '../services/claudeService';
 import { downloadMOM } from '../utils/analysisFormatter';
 import { ORANGE, NAVY } from '../constants';
+import { toast } from 'sonner';
 import { Spinner } from './ui/Spinner';
 import { TabBar } from './ui/TabBar';
 import { useClickOutside } from '../hooks/useClickOutside';
@@ -35,7 +36,6 @@ export function MOMScreen() {
 
   const [tab,        setTab]        = useState('internal');
   const [loading,    setLoading]    = useState(false);
-  const [error,      setError]      = useState(null);
   const [copied,     setCopied]     = useState(false);
   const [dlOpen,     setDlOpen]     = useState(false);
   const [downloaded, setDownloaded] = useState(false);
@@ -62,7 +62,7 @@ export function MOMScreen() {
       const result = await generateMOM(transcript, meetingId, settings?.claudeApiKey);
       setMOM(result);
     } catch (err) {
-      setError(err.message);
+      toast.error(err.message);
       setMOM(null);
     } finally {
       setLoading(false);
@@ -179,13 +179,6 @@ export function MOMScreen() {
 
       {/* Content */}
       <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '16px' }}>
-
-        {/* Error */}
-        {error && (
-          <div style={{ background: '#fef2f2', color: '#dc2626', fontSize: 11.5, padding: '10px 14px', borderRadius: 8, border: '1px solid #fecaca', marginBottom: 14 }}>
-            {error}
-          </div>
-        )}
 
         {/* Loading */}
         {isLoading && (

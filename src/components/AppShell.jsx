@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Toaster } from 'sonner';
 import { Home, FileText, Lightbulb, BarChart2, Settings, Mic, ClipboardList, MessageCircle, Target, BookOpen, Compass } from 'lucide-react';
 import { SCREENS, ORANGE, NAVY } from '../constants';
 import { Spinner } from './ui/Spinner';
@@ -167,6 +168,7 @@ export function AppShell({ children }) {
 
   return (
     <div style={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
+      <Toaster position="bottom-left" richColors theme="light" toastOptions={{ style: { fontSize: 12, fontFamily: 'var(--font-sans)' } }} />
 
       {/* ── Main content ── */}
       <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>

@@ -153,6 +153,11 @@ export function DetectionScreen() {
     clearError();
     try {
       await ensureTranscript();
+      if (!callTitle) {
+        chrome.runtime.sendMessage({ type: 'REFRESH_CALL_TITLE' }, (res) => {
+          if (res?.callTitle) callTitleUpdated(res.callTitle);
+        });
+      }
     } catch (err) {
       setError(err.message);
     } finally {
@@ -339,8 +344,13 @@ export function DetectionScreen() {
                   <div style={{ fontSize: 11, fontWeight: 700, color: NAVY, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                     Transcript Ready
                   </div>
-                  <div style={{ fontSize: 12, fontWeight: 600, color: NAVY, marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {callTitle || meetingId}
+                  {callTitle && (
+                    <div style={{ fontSize: 12, fontWeight: 600, color: NAVY, marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {callTitle}
+                    </div>
+                  )}
+                  <div style={{ fontSize: 10, color: '#8A97A8', marginTop: 1, fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {meetingId}
                   </div>
                 </div>
               </div>
@@ -361,8 +371,13 @@ export function DetectionScreen() {
                   <div style={{ fontSize: 11, fontWeight: 700, color: NAVY, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                     Mindtickle Call Detected
                   </div>
-                  <div style={{ fontSize: 12, fontWeight: 600, color: NAVY, marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {callTitle || meetingId}
+                  {callTitle && (
+                    <div style={{ fontSize: 12, fontWeight: 600, color: NAVY, marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {callTitle}
+                    </div>
+                  )}
+                  <div style={{ fontSize: 10, color: '#8A97A8', marginTop: 1, fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {meetingId}
                   </div>
                 </div>
               </div>

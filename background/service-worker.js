@@ -42,7 +42,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
     case 'MINDTICKLE_DETECTED': {
       const tabId = sender.tab?.id;
-      if (tabId == null) break;
+      if (tabId == null) { sendResponse({}); break; }
       (async () => {
         const prev = await getTabState(tabId);
         const next = {
@@ -66,8 +66,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             callTitle: message.callTitle,
           }).catch(() => {});
         }
+
+        sendResponse({});
       })();
-      break;
+      return true;
     }
 
     case 'GET_TAB_STATE': {
@@ -85,6 +87,24 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             sendResponse({ found: false });
           }
         }
+      });
+      return true;
+    }
+
+    case 'REFRESH_CALL_TITLE': {
+      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+        const tab = tabs[0];
+        if (!tab) { sendResponse({ callTitle: null }); return; }
+        chrome.tabs.sendMessage(tab.id, { type: 'GET_CALL_TITLE' }, (res) => {
+          if (chrome.runtime.lastError) { sendResponse({ callTitle: null }); return; }
+          const title = res?.callTitle ?? null;
+          if (title) {
+            getTabState(tab.id).then(state => {
+              if (state) setTabState(tab.id, { ...state, callTitle: title });
+            });
+          }
+          sendResponse({ callTitle: title });
+        });
       });
       return true;
     }

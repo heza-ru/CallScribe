@@ -11,6 +11,12 @@ import { DEMO_ENVIRONMENTS } from '../data/demoEnvironments';
 import { compressTranscript } from '../utils/transcriptCompressor';
 import { recordTokens } from '../utils/tokenTracker';
 import { getSignal } from '../utils/abortManager';
+import {
+  InsightsSchema, IntelligenceSchema,
+  CompetitorsSchema, ObjectionsSchema, MOMSchema,
+  ExecSummaryPart1Schema, ExecSummaryPart2Schema,
+  FrameworkRecommendationSchema, FrameworkAnalysisSchema,
+} from '../utils/schemas';
 
 const CLAUDE_API_URL = 'https://api.anthropic.com/v1/messages';
 
@@ -75,30 +81,7 @@ function extractJSONObject(raw) {
 function parseIntelligence(raw) {
   try {
     const parsed = extractJSONObject(raw);
-    // Normalize + clamp numeric fields
-    return {
-      callType: parsed.callType || 'Discovery',
-      framework: parsed.framework || '',
-      callSummary: parsed.callSummary || '',
-      effectiveness: Math.min(10, Math.max(1, parsed.effectiveness || 5)),
-      customerSentiment: {
-        label: parsed.customerSentiment?.label || 'Neutral',
-        score: Math.min(10, Math.max(1, parsed.customerSentiment?.score || 5)),
-        positive: parsed.customerSentiment?.positive || 50,
-        neutral: parsed.customerSentiment?.neutral || 30,
-        negative: parsed.customerSentiment?.negative || 20,
-      },
-      questionsAnsweredPct: Math.min(100, Math.max(0, parsed.questionsAnsweredPct || 50)),
-      frameworkCoverage: Array.isArray(parsed.frameworkCoverage) ? parsed.frameworkCoverage : [],
-      keyThemes: Array.isArray(parsed.keyThemes) ? parsed.keyThemes.slice(0, 5) : [],
-      sentimentDrivers: {
-        positive: Array.isArray(parsed.sentimentDrivers?.positive) ? parsed.sentimentDrivers.positive.slice(0, 4) : [],
-        negative: Array.isArray(parsed.sentimentDrivers?.negative) ? parsed.sentimentDrivers.negative.slice(0, 4) : [],
-      },
-      strengths: Array.isArray(parsed.strengths) ? parsed.strengths.slice(0, 3) : [],
-      improvements: Array.isArray(parsed.improvements) ? parsed.improvements.slice(0, 3) : [],
-      nextSteps: Array.isArray(parsed.nextSteps) ? parsed.nextSteps.slice(0, 4) : [],
-    };
+    return IntelligenceSchema.parse(parsed);
   } catch (e) {
     throw new Error(`Failed to parse call intelligence response: ${e.message}`);
   }
@@ -121,14 +104,16 @@ function parseInsights(raw) {
   try {
     const parsed = extractJSONArray(raw);
     if (!Array.isArray(parsed)) throw new Error('Expected a JSON array from Claude');
-    return parsed.map((item, i) => ({
-      id: `insight-${i}-${Date.now()}`,
-      title: item.title || 'Untitled Insight',
-      description: item.description || '',
-      productArea: item.productArea || item.product_area || '',
-      priority: normalizePriority(item.priority),
-      type: normalizeType(item.type),
-    }));
+    const validated = InsightsSchema.parse(
+      parsed.map((item) => ({
+        ...item,
+        // Normalize casing before Zod validates the enum
+        priority: normalizePriority(item.priority),
+        type:     normalizeType(item.type),
+        productArea: item.productArea || item.product_area || '',
+      }))
+    );
+    return validated.map((item, i) => ({ ...item, id: `insight-${i}-${Date.now()}` }));
   } catch (e) {
     throw new Error(`Failed to parse Claude response as JSON: ${e.message}`);
   }
@@ -185,11 +170,7 @@ export async function detectCompetitors(transcript, apiKey) {
   if (!raw) throw new Error('Empty response from Claude API');
   recordTokens('competitors', data.usage?.input_tokens, data.usage?.output_tokens).catch(() => {});
   try {
-    const parsed = extractJSONObject(raw);
-    return {
-      competitors: Array.isArray(parsed.competitors) ? parsed.competitors : [],
-      summary: parsed.summary || '',
-    };
+    return CompetitorsSchema.parse(extractJSONObject(raw));
   } catch (e) {
     throw new Error('Failed to parse competitor response: ' + e.message);
   }
@@ -207,13 +188,7 @@ export async function trackObjections(transcript, apiKey) {
   if (!raw) throw new Error('Empty response from Claude API');
   recordTokens('objections', data.usage?.input_tokens, data.usage?.output_tokens).catch(() => {});
   try {
-    const parsed = extractJSONObject(raw);
-    return {
-      objections:    Array.isArray(parsed.objections) ? parsed.objections : [],
-      handledCount:  parsed.handledCount  ?? 0,
-      totalCount:    parsed.totalCount    ?? 0,
-      topRisk:       parsed.topRisk       ?? null,
-    };
+    return ObjectionsSchema.parse(extractJSONObject(raw));
   } catch (e) {
     throw new Error('Failed to parse objection response: ' + e.message);
   }
@@ -231,11 +206,7 @@ export async function generateMOM(transcript, meetingId, apiKey) {
   if (!raw) throw new Error('Empty response from Claude API');
   recordTokens('mom', data.usage?.input_tokens, data.usage?.output_tokens).catch(() => {});
   try {
-    const parsed = extractJSONObject(raw);
-    return {
-      internal: parsed.internal || '',
-      external: parsed.external || '',
-    };
+    return MOMSchema.parse(extractJSONObject(raw));
   } catch (e) {
     throw new Error('Failed to parse MOM response: ' + e.message);
   }
@@ -297,25 +268,10 @@ export async function generateExecSummary(transcript, meetingId, apiKey) {
       (res1.usage?.output_tokens || 0) + (res2.usage?.output_tokens || 0)
     ).catch(() => {});
 
-    const p1 = extractJSONObject(raw1);
-    const p2 = extractJSONObject(raw2);
+    const p1 = ExecSummaryPart1Schema.parse(extractJSONObject(raw1));
+    const p2 = ExecSummaryPart2Schema.parse(extractJSONObject(raw2));
 
-    return {
-      // Markdown prose sections
-      storyline:    p1.storyline    || '',
-      useCases:     p1.useCases     || '',
-      infosec:      p2.infosec      || '',
-      gaps:         p2.gaps         || '',
-      improvements: p2.improvements || '',
-      // Structured arrays/objects
-      features:       Array.isArray(p1.features) ? p1.features : [],
-      differentiation: p1.differentiation && typeof p1.differentiation === 'object' ? p1.differentiation : { shown: [], missedNow: [], saveLater: [], whyWhatfix: '', vsOthers: '', overallRating: '' },
-      questions:      Array.isArray(p2.questions) ? p2.questions : [],
-      // Summary data
-      scores:           p2.scores || {},
-      executiveSummary: Array.isArray(p2.executiveSummary) ? p2.executiveSummary : [],
-      followUpActions:  Array.isArray(p2.followUpActions)  ? p2.followUpActions  : [],
-    };
+    return { ...p1, ...p2 };
   } catch (e) {
     if (e.name === 'AbortError') throw new Error('Analysis timed out. Please try again.');
     throw e;
@@ -336,14 +292,7 @@ export async function getSolutionFrameworkRecommendation(transcript, apiKey) {
   if (!raw) throw new Error('Empty response from Claude API');
   recordTokens('solution_framework', data.usage?.input_tokens, data.usage?.output_tokens).catch(() => {});
   try {
-    const parsed = extractJSONObject(raw);
-    return {
-      type: parsed.type || 'DT',
-      confidence: parsed.confidence || 'low',
-      reason: parsed.reason || '',
-      alternativeType: parsed.alternativeType || null,
-      alternativeReason: parsed.alternativeReason || null,
-    };
+    return FrameworkRecommendationSchema.parse(extractJSONObject(raw));
   } catch (e) {
     throw new Error('Failed to parse framework recommendation: ' + e.message);
   }
@@ -359,18 +308,7 @@ export async function analyzeSolutionFramework(transcript, frameworkType, apiKey
   if (!raw) throw new Error('Empty response from Claude API');
   recordTokens('solution_framework', data.usage?.input_tokens, data.usage?.output_tokens).catch(() => {});
   try {
-    const parsed = extractJSONObject(raw);
-    return {
-      overallFit: parsed.overallFit || 'moderate',
-      fitReason: parsed.fitReason || '',
-      qualificationSignals: Array.isArray(parsed.qualificationSignals) ? parsed.qualificationSignals : [],
-      discoveryGaps: Array.isArray(parsed.discoveryGaps) ? parsed.discoveryGaps : [],
-      requirementMapping: Array.isArray(parsed.requirementMapping) ? parsed.requirementMapping : [],
-      competitiveContext: parsed.competitiveContext || '',
-      objections: Array.isArray(parsed.objections) ? parsed.objections : [],
-      roiAngles: Array.isArray(parsed.roiAngles) ? parsed.roiAngles : [],
-      demoFocus: parsed.demoFocus || '',
-    };
+    return FrameworkAnalysisSchema.parse(extractJSONObject(raw));
   } catch (e) {
     throw new Error('Failed to parse framework analysis: ' + e.message);
   }

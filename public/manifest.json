@@ -26,6 +26,12 @@
   "content_scripts": [
     {
       "matches": ["https://*.mindtickle.com/*"],
+      "js": ["content/queryInterceptor.js"],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": ["https://*.mindtickle.com/*"],
       "js": ["content/detectMindtickle.js"],
       "run_at": "document_idle"
     }
@@ -45,7 +51,7 @@
   ],
   "web_accessible_resources": [
     {
-      "resources": ["content/transcriptFetcher.js"],
+      "resources": ["content/transcriptFetcher.js", "content/queryInterceptor.js"],
       "matches": ["https://*.mindtickle.com/*"]
     }
   ]

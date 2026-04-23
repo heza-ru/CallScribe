@@ -8,12 +8,27 @@
 
   function getCallTitle() {
     try {
-      const el = document.querySelector('[data-testid="text-recording-title"] div[aria-label]');
-      if (!el) return null;
-      return el.getAttribute('aria-label')?.trim() || el.textContent?.trim() || null;
-    } catch {
-      return null;
-    }
+      // Try known data-testid selectors
+      const byTestId = document.querySelector('[data-testid="text-recording-title"] div[aria-label]');
+      if (byTestId) {
+        const t = byTestId.getAttribute('aria-label')?.trim() || byTestId.textContent?.trim();
+        if (t) return t;
+      }
+
+      // Try aria-label on the container itself
+      const byContainer = document.querySelector('[data-testid="text-recording-title"]');
+      if (byContainer) {
+        const t = byContainer.getAttribute('aria-label')?.trim() || byContainer.textContent?.trim();
+        if (t) return t;
+      }
+
+      // Try document.title — Mindtickle SPAs typically set it to the call name
+      const docTitle = document.title?.trim();
+      if (docTitle && docTitle.toLowerCase() !== 'mindtickle' && docTitle.length > 0) {
+        return docTitle;
+      }
+    } catch {}
+    return null;
   }
 
   function getAuthToken() {
@@ -23,7 +38,6 @@
       if (config?.authToken) return config.authToken;
       if (config?.accessToken) return config.accessToken;
 
-      // Fallback: scan localStorage for a token key
       for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i);
         if (key && (key.toLowerCase().includes('token') || key.toLowerCase().includes('auth'))) {
@@ -38,22 +52,17 @@
           }
         }
       }
-    } catch {
-      // silent
-    }
+    } catch {}
     return null;
   }
 
   function notifyBackground(meetingId, token, callTitle) {
     try {
-      chrome.runtime.sendMessage({
-        type: 'MINDTICKLE_DETECTED',
-        meetingId,
-        token,
-        callTitle,
-        url: window.location.href,
-      });
-    } catch { /* extension context invalidated — ignore */ }
+      chrome.runtime.sendMessage(
+        { type: 'MINDTICKLE_DETECTED', meetingId, token, callTitle, url: window.location.href },
+        () => { void chrome.runtime.lastError; }
+      );
+    } catch { /* extension context invalidated */ }
   }
 
   function init() {
@@ -65,8 +74,14 @@
     notifyBackground(meetingId, token, callTitle);
   }
 
-  // Run on load and also watch for SPA navigations and late-loading title
   init();
+
+  // Re-query title on demand (called when user clicks sync and title was missing)
+  chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+    if (message.type !== 'GET_CALL_TITLE') return false;
+    sendResponse({ callTitle: getCallTitle() });
+    return false;
+  });
 
   let lastPath = window.location.pathname;
   let lastTitle = getCallTitle();
@@ -80,7 +95,6 @@
       lastTitle = currentTitle;
       init();
     } else if (currentTitle && currentTitle !== lastTitle) {
-      // Title appeared or changed after initial detection — re-send with updated title
       lastTitle = currentTitle;
       const meetingId = getMeetingId();
       if (meetingId) notifyBackground(meetingId, getAuthToken(), currentTitle);

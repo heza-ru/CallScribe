@@ -1,6 +1,8 @@
 import { create } from 'zustand';
+import { immer } from 'zustand/middleware/immer';
 import { SCREENS } from './constants';
 import { abortAll } from './utils/abortManager';
+import { loadAnalysisCache, patchAnalysisCache } from './utils/analysisCache';
 
 const CHAT_SESSION_KEY = (meetingId) => `chat_${meetingId}`;
 
@@ -36,7 +38,23 @@ const initialAnalysis = {
   chatMessages:              [],
 };
 
-export const useStore = create((set, get) => ({
+// Fields worth caching to IndexedDB (excludes loading sentinels and transient UI)
+const CACHEABLE_FIELDS = [
+  'insights', '_insightsRan', 'callIntelligence', 'competitors',
+  'objections', 'mom', 'demoScope', 'execSummary',
+  'solutionFramework', 'solutionFrameworkAnalyses',
+];
+
+function safePatch(meetingId, patch) {
+  // Strip loading sentinels before persisting
+  const clean = {};
+  for (const [k, v] of Object.entries(patch)) {
+    if (CACHEABLE_FIELDS.includes(k) && v !== 'loading') clean[k] = v;
+  }
+  if (Object.keys(clean).length > 0) patchAnalysisCache(meetingId, clean);
+}
+
+export const useStore = create(immer((set, get) => ({
   screen:    SCREENS.DETECTION,
   meetingId: null,
   callTitle: null,
@@ -46,17 +64,24 @@ export const useStore = create((set, get) => ({
   ...initialAnalysis,
 
   // ── Navigation ────────────────────────────────────────────────
-  setScreen: (screen) => set({ screen, error: null }),
+  setScreen: (screen) => set((s) => { s.screen = screen; s.error = null; }),
 
   // ── Call detection ────────────────────────────────────────────
   transcriptDetected: (meetingId, token, callTitle) => set((s) => {
     if (meetingId === s.meetingId) {
-      return { token, callTitle: callTitle ?? s.callTitle, error: null };
+      s.token     = token;
+      s.callTitle = callTitle ?? s.callTitle;
+      s.error     = null;
+      return;
     }
-    // Restore chat history for the new meetingId asynchronously
+    // Restore persisted chat and analysis asynchronously
     loadPersistedChat(meetingId).then((msgs) => {
-      if (msgs.length > 0) useStore.setState({ chatMessages: msgs });
+      if (msgs.length > 0) useStore.setState((draft) => { draft.chatMessages = msgs; });
     });
+    loadAnalysisCache(meetingId).then((cached) => {
+      if (cached) useStore.setState((draft) => { Object.assign(draft, cached); });
+    });
+
     return {
       ...initialAnalysis,
       settings:  s.settings,
@@ -68,71 +93,99 @@ export const useStore = create((set, get) => ({
     };
   }),
 
-  callTitleUpdated: (callTitle) => set({ callTitle }),
+  callTitleUpdated: (callTitle) => set((s) => { s.callTitle = callTitle; }),
 
   // ── Transcript ────────────────────────────────────────────────
-  transcriptLoaded: (chunks, transcript) => set({ chunks, transcript, error: null }),
+  transcriptLoaded: (chunks, transcript) => set((s) => {
+    s.chunks = chunks; s.transcript = transcript; s.error = null;
+  }),
 
   // ── Insights ──────────────────────────────────────────────────
-  insightsLoaded: (insights) => set({ insights, _insightsRan: true, error: null }),
+  insightsLoaded: (insights) => {
+    set((s) => { s.insights = insights; s._insightsRan = true; s.error = null; });
+    safePatch(get().meetingId, { insights, _insightsRan: true });
+  },
 
   // ── Call Intelligence ─────────────────────────────────────────
-  setCallIntelligence: (value) => set({ callIntelligence: value }),
+  setCallIntelligence: (value) => {
+    set((s) => { s.callIntelligence = value; });
+    if (value !== 'loading') safePatch(get().meetingId, { callIntelligence: value });
+  },
 
   // ── Ticket editing ────────────────────────────────────────────
-  editTicket:      (ticket) => set({ draftTicket: ticket, screen: SCREENS.TICKET_REVIEW }),
-  ticketSubmitted: ()       => set({ draftTicket: null,   screen: SCREENS.ANALYSIS }),
+  editTicket:      (ticket) => set((s) => { s.draftTicket = ticket; s.screen = SCREENS.TICKET_REVIEW; }),
+  ticketSubmitted: ()       => set((s) => { s.draftTicket = null;   s.screen = SCREENS.ANALYSIS; }),
 
   // ── Settings ──────────────────────────────────────────────────
-  settingsLoaded: (settings) => set({ settings }),
-  settingsSaved:  (settings) => set({ settings, screen: SCREENS.DETECTION }),
+  settingsLoaded: (settings) => set((s) => { s.settings = settings; }),
+  settingsSaved:  (settings) => set((s) => { s.settings = settings; s.screen = SCREENS.DETECTION; }),
 
   // ── Error ─────────────────────────────────────────────────────
-  setError:   (error) => set({ error }),
-  clearError: ()      => set({ error: null }),
+  setError:   (error) => set((s) => { s.error = error; }),
+  clearError: ()      => set((s) => { s.error = null; }),
 
   // ── Competitors ───────────────────────────────────────────────
-  setCompetitors: (value) => set({ competitors: value }),
+  setCompetitors: (value) => {
+    set((s) => { s.competitors = value; });
+    if (value !== 'loading') safePatch(get().meetingId, { competitors: value });
+  },
 
   // ── Objections ────────────────────────────────────────────────
-  setObjections: (value) => set({ objections: value }),
+  setObjections: (value) => {
+    set((s) => { s.objections = value; });
+    if (value !== 'loading') safePatch(get().meetingId, { objections: value });
+  },
 
   // ── Meeting Minutes ───────────────────────────────────────────
-  setMOM: (value) => set({ mom: value }),
+  setMOM: (value) => {
+    set((s) => { s.mom = value; });
+    if (value !== 'loading') safePatch(get().meetingId, { mom: value });
+  },
 
   // ── Demo Scope ────────────────────────────────────────────────
-  setDemoScope: (value) => set({ demoScope: value }),
+  setDemoScope: (value) => {
+    set((s) => { s.demoScope = value; });
+    safePatch(get().meetingId, { demoScope: value });
+  },
 
   // ── Exec Summary ──────────────────────────────────────────────
-  setExecSummary:        (value) => set({ execSummary: value, execSummaryError: null }),
-  setExecSummaryError:   (error) => set({ execSummary: null, execSummaryError: error || 'Analysis failed. Please try again.' }),
-  setExecSummaryLoading: ()      => set({ execSummary: 'loading', execSummaryError: null }),
+  setExecSummary: (value) => {
+    set((s) => { s.execSummary = value; s.execSummaryError = null; });
+    safePatch(get().meetingId, { execSummary: value });
+  },
+  setExecSummaryError:   (error) => set((s) => {
+    s.execSummary = null;
+    s.execSummaryError = error || 'Analysis failed. Please try again.';
+  }),
+  setExecSummaryLoading: () => set((s) => { s.execSummary = 'loading'; s.execSummaryError = null; }),
 
   // ── Solution Framework ────────────────────────────────────────
-  setSolutionFramework: (value) => set({ solutionFramework: value }),
-  setSolutionFrameworkAnalysis: (frameworkType, value) => set((s) => ({
-    solutionFrameworkAnalyses: { ...s.solutionFrameworkAnalyses, [frameworkType]: value },
-  })),
+  setSolutionFramework: (value) => {
+    set((s) => { s.solutionFramework = value; });
+    safePatch(get().meetingId, { solutionFramework: value });
+  },
+  setSolutionFrameworkAnalysis: (frameworkType, value) => {
+    set((s) => { s.solutionFrameworkAnalyses[frameworkType] = value; });
+    safePatch(get().meetingId, { solutionFrameworkAnalyses: get().solutionFrameworkAnalyses });
+  },
 
-  // ── Chat (persisted to chrome.storage.session per meetingId) ─────
+  // ── Chat (persisted to chrome.storage.session per meetingId) ──
   chatAddMessage: (message) => set((s) => {
-    const msgs = [...s.chatMessages, message];
-    persistChat(s.meetingId, msgs);
-    return { chatMessages: msgs };
+    s.chatMessages.push(message);
+    persistChat(s.meetingId, s.chatMessages);
   }),
   chatUpdateLast: (message) => set((s) => {
-    const msgs = [...s.chatMessages.slice(0, -1), message];
-    persistChat(s.meetingId, msgs);
-    return { chatMessages: msgs };
+    s.chatMessages[s.chatMessages.length - 1] = message;
+    persistChat(s.meetingId, s.chatMessages);
   }),
   chatClear: () => set((s) => {
+    s.chatMessages = [];
     persistChat(s.meetingId, []);
-    return { chatMessages: [] };
   }),
 
   // ── Abort all in-flight Claude requests ──────────────────────
   abortAnalysis: () => abortAll(),
 
   // ── Reset ─────────────────────────────────────────────────────
-  resetAnalysis: () => set({ ...initialAnalysis }),
-}));
+  resetAnalysis: () => set((s) => { Object.assign(s, initialAnalysis); }),
+})));

@@ -2,13 +2,14 @@ import { useState, useRef } from 'react';
 import {
   Bug, Zap, MessageSquare, Lightbulb, ListTodo,
   ExternalLink, Pencil, X, RefreshCw, LayoutList,
-  BarChart2, ArrowRight, AlertTriangle, Download, ChevronDown, Check,
+  BarChart2, ArrowRight, Download, ChevronDown, Check,
 } from 'lucide-react';
 import { analyzeTranscript, analyzeCallIntelligence } from '../services/claudeService';
 import { createJiraTicket } from '../services/jiraService';
 import { createProductboardInsight } from '../services/productboardService';
 import { downloadAllInsights, downloadSingleInsight, downloadFullReport } from '../utils/analysisFormatter';
 import { SCREENS, ORANGE, NAVY } from '../constants';
+import { toast } from 'sonner';
 import { Spinner } from './ui/Spinner';
 import { TabBar } from './ui/TabBar';
 import { useClickOutside } from '../hooks/useClickOutside';
@@ -316,7 +317,6 @@ export function AnalysisScreen() {
 
   const [activeTab,   setTab]        = useState('all');
   const [reanalyzing, setReanalyzing] = useState(false);
-  const [error,       setError]       = useState(null);
   const [dismissed,   setDismissed]   = useState(new Set());
   const [exportOpen,  setExportOpen]  = useState(false);
   const [downloaded,  setDownloaded]  = useState(false);
@@ -405,7 +405,7 @@ export function AnalysisScreen() {
       insightsLoaded(newInsights);
       setDismissed(new Set());
     } catch (err) {
-      setError(err.message);
+      toast.error(err.message);
     } finally {
       setReanalyzing(false);
     }
@@ -524,13 +524,6 @@ export function AnalysisScreen() {
           </div>
         )}
       </TabBar>
-
-      {error && (
-        <div className="banner error" style={{ margin: '6px 14px 0', flexShrink: 0 }}>
-          <AlertTriangle size={12} style={{ flexShrink: 0 }} />
-          {error}
-        </div>
-      )}
 
       {/* Card list */}
       <div key={activeTab} style={{

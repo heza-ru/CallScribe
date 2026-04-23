@@ -1,5 +1,4 @@
-import { useState, useRef, useLayoutEffect, useEffect } from 'react';
-import gsap from 'gsap';
+import { useState, useRef, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import {
@@ -8,6 +7,7 @@ import {
 import { generateExecSummary } from '../services/claudeService';
 import { downloadExecSummary } from '../utils/analysisFormatter';
 import { SCREENS, ORANGE, NAVY } from '../constants';
+import { toast } from 'sonner';
 import { useClickOutside } from '../hooks/useClickOutside';
 import { mdComponents } from '../utils/markdownComponents';
 import { TabBar } from './ui/TabBar';
@@ -119,12 +119,14 @@ function ScoreCard({ label, score, rationale }) {
   );
 }
 
-function SectionBlock({ title, content }) {
+function SectionBlock({ title, content, animDelay = 0 }) {
   if (!content?.trim()) return null;
   return (
-    <div className="cs-exec-section" style={{
+    <div style={{
       background: '#fff', borderRadius: 10, border: '1px solid #E4E9F0',
       padding: '14px 16px',
+      animation: 'itemEnter 400ms cubic-bezier(0.22,1,0.36,1) both',
+      animationDelay: `${animDelay}ms`,
     }}>
       <div style={{
         fontSize: 10, fontWeight: 800, color: NAVY,
@@ -325,28 +327,12 @@ function QACards({ questions }) {
 // ── Tabs ──────────────────────────────────────────────────────────
 
 function SummaryTab({ data }) {
-  const tabRef = useRef(null);
-
-  useLayoutEffect(() => {
-    if (!tabRef.current) return;
-    const ctx = gsap.context(() => {
-      gsap.fromTo('.cs-score-card',
-        { opacity: 0, y: 14, scale: 0.95 },
-        { opacity: 1, y: 0, scale: 1, duration: 0.38, ease: 'power2.out', stagger: 0.05, clearProps: 'transform,opacity' }
-      );
-      gsap.fromTo('.cs-exec-bullet',
-        { opacity: 0, x: -8 },
-        { opacity: 1, x: 0, duration: 0.38, ease: 'power2.out', stagger: 0.06, delay: 0.35, clearProps: 'transform,opacity' }
-      );
-    }, tabRef);
-    return () => ctx.revert();
-  }, []);
 
   const overallScore = data.scores?.overallEffectiveness?.score;
   const overallColor = SCORE_COLORS[overallScore] || '#6b7280';
 
   return (
-    <div ref={tabRef} style={{ flex: 1, overflowY: 'auto', padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+    <div style={{ flex: 1, overflowY: 'auto', padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
 
       {/* Overall score hero */}
       {overallScore && (
@@ -378,11 +364,11 @@ function SummaryTab({ data }) {
 
       {/* Score grid */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-        {SCORE_KEYS.filter(k => k.key !== 'overallEffectiveness').map(({ key, label }) => {
+        {SCORE_KEYS.filter(k => k.key !== 'overallEffectiveness').map(({ key, label }, idx) => {
           const s = data.scores?.[key];
           if (!s) return null;
           return (
-            <div key={key} className="cs-score-card">
+            <div key={key} style={{ animation: 'cardEnter 380ms cubic-bezier(0.22,1,0.36,1) both', animationDelay: `${idx * 50}ms` }}>
               <ScoreCard label={label} score={s.score} rationale={s.rationale} />
             </div>
           );
@@ -402,7 +388,7 @@ function SummaryTab({ data }) {
           </div>
           <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 10 }}>
             {data.executiveSummary.map((bullet, i) => (
-              <div key={i} className="cs-exec-bullet" style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+              <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', animation: 'slideInLeft 380ms cubic-bezier(0.22,1,0.36,1) both', animationDelay: `${350 + i * 60}ms` }}>
                 <div style={{
                   minWidth: 20, height: 20, borderRadius: 5, background: NAVY,
                   fontSize: 9, fontWeight: 800, color: '#fff',
@@ -422,21 +408,13 @@ function SummaryTab({ data }) {
 }
 
 function DemoTab({ data }) {
-  const tabRef = useRef(null);
-  useLayoutEffect(() => {
-    if (!tabRef.current) return;
-    const ctx = gsap.context(() => {
-      gsap.fromTo('.cs-exec-section', { opacity: 0, y: 14 }, { opacity: 1, y: 0, duration: 0.4, ease: 'power2.out', stagger: 0.07, clearProps: 'transform,opacity' });
-    }, tabRef);
-    return () => ctx.revert();
-  }, []);
 
   return (
-    <div ref={tabRef} style={{ flex: 1, overflowY: 'auto', padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
-      <SectionBlock title="Demo Storyline & Flow" content={data.storyline} />
-      <SectionBlock title="Use Cases & Product Positioning" content={data.useCases} />
+    <div style={{ flex: 1, overflowY: 'auto', padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <SectionBlock title="Demo Storyline & Flow" content={data.storyline} animDelay={0} />
+      <SectionBlock title="Use Cases & Product Positioning" content={data.useCases} animDelay={70} />
       {data.features?.length > 0 && (
-        <div className="cs-exec-section" style={{ background: '#fff', borderRadius: 10, border: '1px solid #E4E9F0', padding: '14px 16px' }}>
+        <div style={{ background: '#fff', borderRadius: 10, border: '1px solid #E4E9F0', padding: '14px 16px', animation: 'itemEnter 400ms cubic-bezier(0.22,1,0.36,1) both', animationDelay: '140ms' }}>
           <div style={{ fontSize: 10, fontWeight: 800, color: NAVY, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 12, paddingBottom: 8, borderBottom: `2px solid ${ORANGE}`, display: 'inline-block' }}>
             Feature Demonstration Quality
           </div>
@@ -446,7 +424,7 @@ function DemoTab({ data }) {
         </div>
       )}
       {data.differentiation && (
-        <div className="cs-exec-section" style={{ background: '#fff', borderRadius: 10, border: '1px solid #E4E9F0', padding: '14px 16px' }}>
+        <div style={{ background: '#fff', borderRadius: 10, border: '1px solid #E4E9F0', padding: '14px 16px', animation: 'itemEnter 400ms cubic-bezier(0.22,1,0.36,1) both', animationDelay: '210ms' }}>
           <div style={{ fontSize: 10, fontWeight: 800, color: NAVY, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 12, paddingBottom: 8, borderBottom: `2px solid ${ORANGE}`, display: 'inline-block' }}>
             Whatfix Differentiation Analysis
           </div>
@@ -460,19 +438,11 @@ function DemoTab({ data }) {
 }
 
 function RisksTab({ data }) {
-  const tabRef = useRef(null);
-  useLayoutEffect(() => {
-    if (!tabRef.current) return;
-    const ctx = gsap.context(() => {
-      gsap.fromTo('.cs-exec-section', { opacity: 0, y: 14 }, { opacity: 1, y: 0, duration: 0.4, ease: 'power2.out', stagger: 0.07, clearProps: 'transform,opacity' });
-    }, tabRef);
-    return () => ctx.revert();
-  }, []);
 
   return (
-    <div ref={tabRef} style={{ flex: 1, overflowY: 'auto', padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+    <div style={{ flex: 1, overflowY: 'auto', padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
       {data.questions?.length > 0 && (
-        <div className="cs-exec-section" style={{ background: '#fff', borderRadius: 10, border: '1px solid #E4E9F0', padding: '14px 16px' }}>
+        <div style={{ background: '#fff', borderRadius: 10, border: '1px solid #E4E9F0', padding: '14px 16px', animation: 'itemEnter 400ms cubic-bezier(0.22,1,0.36,1) both', animationDelay: '0ms' }}>
           <div style={{ fontSize: 10, fontWeight: 800, color: NAVY, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 12, paddingBottom: 8, borderBottom: `2px solid ${ORANGE}`, display: 'inline-block' }}>
             Customer Questions, Objections & Responses
           </div>
@@ -481,36 +451,20 @@ function RisksTab({ data }) {
           </div>
         </div>
       )}
-      <SectionBlock title="InfoSec / Deployment Deep Dive" content={data.infosec} />
-      <SectionBlock title="Gaps & Missed Opportunities" content={data.gaps} />
+      <SectionBlock title="InfoSec / Deployment Deep Dive" content={data.infosec} animDelay={70} />
+      <SectionBlock title="Gaps & Missed Opportunities" content={data.gaps} animDelay={140} />
     </div>
   );
 }
 
 function NextStepsTab({ data, onReanalyze, reanalyzing }) {
-  const tabRef = useRef(null);
-
-  useLayoutEffect(() => {
-    if (!tabRef.current) return;
-    const ctx = gsap.context(() => {
-      gsap.fromTo('.cs-exec-section',
-        { opacity: 0, y: 14 },
-        { opacity: 1, y: 0, duration: 0.4, ease: 'power2.out', stagger: 0.07, clearProps: 'transform,opacity' }
-      );
-      gsap.fromTo('.cs-follow-action',
-        { opacity: 0, x: -8 },
-        { opacity: 1, x: 0, duration: 0.38, ease: 'power2.out', stagger: 0.07, delay: 0.28, clearProps: 'transform,opacity' }
-      );
-    }, tabRef);
-    return () => ctx.revert();
-  }, []);
 
   return (
-    <div ref={tabRef} style={{ flex: 1, overflowY: 'auto', padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
-      <SectionBlock title="Opportunities & Improvements" content={data.improvements} />
+    <div style={{ flex: 1, overflowY: 'auto', padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <SectionBlock title="Opportunities & Improvements" content={data.improvements} animDelay={0} />
 
       {data.followUpActions?.length > 0 && (
-        <div className="cs-exec-section" style={{ background: '#fff', borderRadius: 10, border: '1px solid #E4E9F0', padding: '14px 16px' }}>
+        <div style={{ background: '#fff', borderRadius: 10, border: '1px solid #E4E9F0', padding: '14px 16px', animation: 'itemEnter 400ms cubic-bezier(0.22,1,0.36,1) both', animationDelay: '70ms' }}>
           <div style={{
             fontSize: 10, fontWeight: 800, color: NAVY,
             textTransform: 'uppercase', letterSpacing: '0.08em',
@@ -521,7 +475,7 @@ function NextStepsTab({ data, onReanalyze, reanalyzing }) {
           </div>
           <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 10 }}>
             {data.followUpActions.map((action, i) => (
-              <div key={i} className="cs-follow-action" style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+              <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', animation: 'slideInLeft 380ms cubic-bezier(0.22,1,0.36,1) both', animationDelay: `${280 + i * 70}ms` }}>
                 <span style={{
                   minWidth: 20, height: 20, borderRadius: 6, background: ORANGE,
                   fontSize: 9, fontWeight: 900, color: '#fff',
@@ -576,7 +530,6 @@ export function ExecSummaryScreen() {
 
   const [tab,         setTab]         = useState('summary');
   const [reanalyzing, setReanalyzing] = useState(false);
-  const [error,       setError]       = useState(null);
   const [dlOpen,      setDlOpen]      = useState(false);
   const [loadPct,     setLoadPct]     = useState(0);
   const [loadStep,    setLoadStep]    = useState(0);
@@ -618,7 +571,7 @@ export function ExecSummaryScreen() {
       const result = await generateExecSummary(transcript, meetingId, settings?.claudeApiKey);
       setExecSummary(result);
     } catch (err) {
-      setError(err.message);
+      toast.error(err.message);
       setExecSummaryError(err.message);
     } finally {
       setReanalyzing(false);
@@ -832,12 +785,6 @@ export function ExecSummaryScreen() {
           </div>
         </div>
       </div>
-
-      {error && (
-        <div style={{ background: '#fef2f2', color: '#dc2626', fontSize: 11, padding: '8px 14px', flexShrink: 0, borderBottom: '1px solid #fecaca' }}>
-          {error}
-        </div>
-      )}
 
       {/* Tab bar */}
       <TabBar tabs={TABS} active={tab} onSelect={setTab} scrollable size="sm" />

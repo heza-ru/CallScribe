@@ -8,6 +8,7 @@ import {
 import { analyzeTranscript, analyzeCallIntelligence, detectCompetitors, trackObjections } from '../services/claudeService';
 import { downloadIntelligence, downloadCompetitors, downloadObjections, downloadFullReport } from '../utils/analysisFormatter';
 import { SCREENS, ORANGE, NAVY } from '../constants';
+import { toast } from 'sonner';
 import { Spinner } from './ui/Spinner';
 import { TabBar } from './ui/TabBar';
 import { useClickOutside } from '../hooks/useClickOutside';
@@ -374,7 +375,6 @@ const SENTIMENT_STYLE = {
 
 function CompetitorsTab({ transcript, settings, competitors, setCompetitors, meetingId }) {
   const [loading,  setLoading]  = useState(false);
-  const [error,    setError]    = useState(null);
   const [dlOpen,   setDlOpen]   = useState(false);
   const dlRef = useRef(null);
 
@@ -385,13 +385,12 @@ function CompetitorsTab({ transcript, settings, competitors, setCompetitors, mee
 
   async function handleDetect() {
     setLoading(true);
-    setError(null);
     setCompetitors('loading');
     try {
       const result = await detectCompetitors(transcript, settings?.claudeApiKey);
       setCompetitors(result);
     } catch (err) {
-      setError(err.message);
+      toast.error(err.message);
       setCompetitors(null);
     } finally {
       setLoading(false);
@@ -402,12 +401,6 @@ function CompetitorsTab({ transcript, settings, competitors, setCompetitors, mee
 
   return (
     <div style={{ flex: 1, overflowY: 'auto', padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
-      {error && (
-        <div style={{ background: '#fef2f2', color: '#dc2626', fontSize: 11.5, padding: '9px 12px', borderRadius: 7, border: '1px solid #fecaca' }}>
-          {error}
-        </div>
-      )}
-
       {!hasData && !isLoading && (
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14, padding: '40px 16px', textAlign: 'center' }}>
           <div style={{ width: 48, height: 48, borderRadius: 12, background: '#fff', border: '1px solid #E4E9F0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -525,7 +518,6 @@ const SEVERITY_STYLE = {
 
 function ObjectionsTab({ transcript, settings, objections, setObjections, meetingId }) {
   const [loading,  setLoading]  = useState(false);
-  const [error,    setError]    = useState(null);
   const [dlOpen,   setDlOpen]   = useState(false);
   const dlRef = useRef(null);
 
@@ -537,13 +529,12 @@ function ObjectionsTab({ transcript, settings, objections, setObjections, meetin
 
   async function handleDetect() {
     setLoading(true);
-    setError(null);
     setObjections('loading');
     try {
       const result = await trackObjections(transcript, settings?.claudeApiKey);
       setObjections(result);
     } catch (err) {
-      setError(err.message);
+      toast.error(err.message);
       setObjections(null);
     } finally {
       setLoading(false);
@@ -552,12 +543,6 @@ function ObjectionsTab({ transcript, settings, objections, setObjections, meetin
 
   return (
     <div style={{ flex: 1, overflowY: 'auto', padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
-      {error && (
-        <div style={{ background: '#fef2f2', color: '#dc2626', fontSize: 11.5, padding: '9px 12px', borderRadius: 7, border: '1px solid #fecaca' }}>
-          {error}
-        </div>
-      )}
-
       {!hasData && !isLoading && (
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14, padding: '40px 16px', textAlign: 'center' }}>
           <div style={{ width: 48, height: 48, borderRadius: 12, background: '#fff', border: '1px solid #E4E9F0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -710,7 +695,6 @@ export function IntelligenceScreen() {
 
   const [tab,         setTab]         = useState('insights');
   const [reanalyzing, setReanalyzing] = useState(false);
-  const [error,       setError]       = useState(null);
   const [dlOpen,      setDlOpen]      = useState(false);
   const dlRef = useRef(null);
   const activeTabBtnRef = useRef(null);
@@ -738,7 +722,7 @@ export function IntelligenceScreen() {
       insightsLoaded(insights);
       setScreen(SCREENS.INTELLIGENCE);
     } catch (err) {
-      setError(err.message);
+      toast.error(err.message);
     } finally {
       setReanalyzing(false);
     }
@@ -871,12 +855,6 @@ export function IntelligenceScreen() {
           </div>
         </div>
       </div>
-
-      {error && (
-        <div style={{ background: '#fef2f2', color: '#dc2626', fontSize: 11, padding: '8px 14px', flexShrink: 0, borderBottom: '1px solid #fecaca' }}>
-          {error}
-        </div>
-      )}
 
       {/* Tab bar — scrollable so all tabs are reachable at any width */}
       <TabBar tabs={TABS} active={tab} onSelect={setTab} scrollable size="sm" activeRef={activeTabBtnRef} />

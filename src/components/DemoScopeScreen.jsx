@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Target, RefreshCw, ExternalLink, Copy, Check, AlertTriangle, CheckCircle2, Copy as CopyIcon, GitBranch, Building2, Layers, Zap, Monitor, Smartphone, AppWindow } from 'lucide-react';
+import { toast } from 'sonner';
+import { Target, RefreshCw, ExternalLink, Copy, Check, CheckCircle2, Copy as CopyIcon, GitBranch, Building2, Layers, Zap, Monitor, Smartphone, AppWindow } from 'lucide-react';
 import { analyzeDemoScope } from '../services/claudeService';
 import { ORANGE, NAVY } from '../constants';
 import { Spinner } from './ui/Spinner';
@@ -127,7 +128,6 @@ export function DemoScopeScreen() {
   const setDemoScope = useStore(s => s.setDemoScope);
 
   const [loading, setLoading] = useState(false);
-  const [error,   setError]   = useState(null);
   const [copied,  setCopied]  = useState(false);
 
   const scope = demoScope;
@@ -137,13 +137,12 @@ export function DemoScopeScreen() {
   async function handleAnalyze() {
     if (!transcript) return;
     setLoading(true);
-    setError(null);
     setDemoScope('loading');
     try {
       const result = await analyzeDemoScope(transcript, settings?.claudeApiKey);
       setDemoScope(result);
     } catch (err) {
-      setError(err.message);
+      toast.error(err.message);
       setDemoScope(null);
     } finally {
       setLoading(false);
@@ -243,14 +242,6 @@ export function DemoScopeScreen() {
       {/* Body */}
       <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '14px 16px 20px', display: 'flex', flexDirection: 'column', gap: 12 }}>
 
-        {/* Error */}
-        {error && (
-          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, background: '#fef2f2', color: '#dc2626', fontSize: 11.5, padding: '10px 14px', borderRadius: 8, border: '1px solid #fecaca' }}>
-            <AlertTriangle size={13} style={{ flexShrink: 0, marginTop: 1 }} strokeWidth={2} />
-            {error}
-          </div>
-        )}
-
         {/* Loading */}
         {isLoading && (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 14, padding: '60px 20px', textAlign: 'center' }}>
@@ -269,7 +260,7 @@ export function DemoScopeScreen() {
         )}
 
         {/* Empty state */}
-        {!isLoading && !hasContent && !error && (
+        {!isLoading && !hasContent && (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 14, padding: '60px 20px', textAlign: 'center' }}>
             <div style={{ width: 52, height: 52, borderRadius: 14, background: '#fff', border: '1px solid #E4E9F0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <Target size={24} style={{ color: '#C8D2DE' }} />

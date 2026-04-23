@@ -15,12 +15,14 @@ export default defineConfig({
         'service-worker': resolve(__dirname, 'background/service-worker.js'),
         detectMindtickle: resolve(__dirname, 'content/detectMindtickle.js'),
         transcriptFetcher: resolve(__dirname, 'content/transcriptFetcher.js'),
+        queryInterceptor: resolve(__dirname, 'content/queryInterceptor.js'),
       },
       output: {
         entryFileNames: (chunkInfo) => {
           if (chunkInfo.name === 'service-worker') return 'background/service-worker.js';
           if (chunkInfo.name === 'detectMindtickle') return 'content/detectMindtickle.js';
           if (chunkInfo.name === 'transcriptFetcher') return 'content/transcriptFetcher.js';
+          if (chunkInfo.name === 'queryInterceptor') return 'content/queryInterceptor.js';
           return 'assets/[name]-[hash].js';
         },
         chunkFileNames: 'assets/[name]-[hash].js',

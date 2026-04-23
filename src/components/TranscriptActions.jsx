@@ -3,6 +3,7 @@ import {
   Download, Sparkles, TicketCheck,
   CheckCircle2, Users, AlignLeft, Clock, ChevronDown, Search, X,
 } from 'lucide-react';
+import { toast } from 'sonner';
 import { analyzeTranscript, analyzeCallIntelligence } from '../services/claudeService';
 import { downloadTranscript } from '../utils/transcriptFormatter';
 import { SCREENS, ORANGE, NAVY } from '../constants';
@@ -68,7 +69,6 @@ export function TranscriptActions() {
   const insightsLoaded  = useStore(s => s.insightsLoaded);
 
   const [analyzing,    setAnalyzing]    = useState(false);
-  const [error,        setError]        = useState(null);
   const [downloadOpen, setDownloadOpen] = useState(false);
   const [downloaded,   setDownloaded]   = useState(null);
   const [searchQuery,  setSearchQuery]  = useState('');
@@ -103,7 +103,6 @@ export function TranscriptActions() {
   }, [transcript, chunks]);
 
   async function handleAnalyze() {
-    setError(null);
     setAnalyzing(true);
 
     const apiKey = settings?.claudeApiKey;
@@ -118,7 +117,7 @@ export function TranscriptActions() {
       insightsLoaded(newInsights);
       setScreen(SCREENS.ANALYSIS);
     } catch (err) {
-      setError(err.message);
+      toast.error(err.message);
     } finally {
       setAnalyzing(false);
     }
@@ -288,18 +287,6 @@ export function TranscriptActions() {
       </div>
         );
       })()}
-
-      {/* Error banner */}
-      {error && (
-        <div style={{
-          margin: '0 14px 6px', flexShrink: 0,
-          background: '#fef2f2', color: '#dc2626',
-          fontSize: 11, padding: '8px 12px', borderRadius: 7,
-          border: '1px solid #fecaca',
-        }}>
-          {error}
-        </div>
-      )}
 
       {/* Footer */}
       <div style={{
