@@ -1,18 +1,19 @@
-import { useEffect, useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import {
   AlertTriangle, CheckCircle2, Loader2,
   ArrowRight, RefreshCw, Settings,
   Info, RotateCcw, FileText, ListChecks, BarChart2,
   ClipboardList, MessageCircle, Target, PackageOpen, BookOpen, Compass,
 } from 'lucide-react';
-import { SCREENS } from '../constants';
+import { SCREENS, ORANGE, NAVY } from '../constants';
 import { parseChunks } from '../utils/mindtickleParser';
 import { analyzeCallIntelligence, generateExecSummary } from '../services/claudeService';
 import { downloadFullReport } from '../utils/analysisFormatter';
+import { Spinner } from './ui/Spinner';
+import { useClickOutside } from '../hooks/useClickOutside';
+import { useStore } from '../store';
 
 const STATUS = { CHECKING: 'checking', FOUND: 'found', NOT_FOUND: 'not_found', ERROR: 'error' };
-const ORANGE = '#E55014';
-const NAVY   = '#0D1726';
 
 function QuickActionRow({ icon: Icon, title, onClick, disabled, loading }) {
   const [hovered, setHovered] = useState(false);
@@ -35,14 +36,7 @@ function QuickActionRow({ icon: Icon, title, onClick, disabled, loading }) {
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         {loading ? (
-          <span style={{
-            width: 13, height: 13,
-            border: '2px solid #E4E9F0',
-            borderTopColor: ORANGE,
-            borderRadius: '50%',
-            animation: 'spin 0.7s linear infinite',
-            display: 'inline-block', flexShrink: 0,
-          }} />
+          <Spinner size={13} color={ORANGE} trackColor="#E4E9F0" />
         ) : (
           <Icon size={13} style={{ color: ORANGE, flexShrink: 0 }} strokeWidth={2.5} />
         )}
@@ -86,7 +80,23 @@ function APIStatusCard({ settings }) {
   );
 }
 
-export function DetectionScreen({ state, dispatch }) {
+export function DetectionScreen() {
+  const transcript         = useStore(s => s.transcript);
+  const meetingId          = useStore(s => s.meetingId);
+  const token              = useStore(s => s.token);
+  const callTitle          = useStore(s => s.callTitle);
+  const settings           = useStore(s => s.settings);
+  const error              = useStore(s => s.error);
+  const transcriptDetected = useStore(s => s.transcriptDetected);
+  const transcriptLoaded   = useStore(s => s.transcriptLoaded);
+  const setCallIntelligence = useStore(s => s.setCallIntelligence);
+  const setScreen          = useStore(s => s.setScreen);
+  const setExecSummaryLoading = useStore(s => s.setExecSummaryLoading);
+  const setExecSummary     = useStore(s => s.setExecSummary);
+  const setExecSummaryError = useStore(s => s.setExecSummaryError);
+  const setError           = useStore(s => s.setError);
+  const clearError         = useStore(s => s.clearError);
+
   const [status,       setStatus]       = useState(STATUS.CHECKING);
   const [busyOp,       setBusyOp]       = useState(null); // null | 'sync' | 'transcribe' | 'insights' | 'actionables'
   const [reportDlOpen, setReportDlOpen] = useState(false);
@@ -94,12 +104,7 @@ export function DetectionScreen({ state, dispatch }) {
 
   useEffect(() => { detect(); }, []);
 
-  useEffect(() => {
-    if (!reportDlOpen) return;
-    function onDown(e) { if (reportDlRef.current && !reportDlRef.current.contains(e.target)) setReportDlOpen(false); }
-    document.addEventListener('mousedown', onDown);
-    return () => document.removeEventListener('mousedown', onDown);
-  }, [reportDlOpen]);
+  useClickOutside(reportDlRef, reportDlOpen ? () => setReportDlOpen(false) : null);
 
   function detect() {
     setStatus(STATUS.CHECKING);
@@ -108,7 +113,7 @@ export function DetectionScreen({ state, dispatch }) {
       chrome.runtime.sendMessage({ type: 'GET_TAB_STATE' }, (res) => {
         if (chrome.runtime.lastError) { setStatus(STATUS.ERROR); return; }
         if (res?.found && res?.meetingId) {
-          dispatch({ type: 'TRANSCRIPT_DETECTED', meetingId: res.meetingId, token: res.token, callTitle: res.callTitle ?? null });
+          transcriptDetected(res.meetingId, res.token, res.callTitle ?? null);
           setStatus(STATUS.FOUND);
         } else {
           setStatus(STATUS.NOT_FOUND);
@@ -119,19 +124,19 @@ export function DetectionScreen({ state, dispatch }) {
 
   // Returns transcript text — fetches from API if not already loaded
   function ensureTranscript() {
-    if (state.transcript) return Promise.resolve(state.transcript);
+    if (transcript) return Promise.resolve(transcript);
     if (!chrome?.runtime) return Promise.reject(new Error('Extension context unavailable. Try reloading the page.'));
     return new Promise((resolve, reject) => {
       try {
         chrome.runtime.sendMessage(
-          { type: 'FETCH_TRANSCRIPT', meetingId: state.meetingId, token: state.token },
+          { type: 'FETCH_TRANSCRIPT', meetingId, token },
           (res) => {
             if (chrome.runtime.lastError || !res?.success) {
               reject(new Error(res?.error || 'Failed to fetch transcript'));
               return;
             }
             const { plainText } = parseChunks(res.chunks);
-            dispatch({ type: 'TRANSCRIPT_LOADED', chunks: res.chunks, transcript: plainText });
+            transcriptLoaded(res.chunks, plainText);
             resolve(plainText);
           }
         );
@@ -143,13 +148,13 @@ export function DetectionScreen({ state, dispatch }) {
 
   // Sync — fetch transcript, stay on this page
   async function handleSync() {
-    if (!state.meetingId) return;
+    if (!meetingId) return;
     setBusyOp('sync');
-    dispatch({ type: 'CLEAR_ERROR' });
+    clearError();
     try {
       await ensureTranscript();
     } catch (err) {
-      dispatch({ type: 'SET_ERROR', error: err.message });
+      setError(err.message);
     } finally {
       setBusyOp(null);
     }
@@ -158,12 +163,12 @@ export function DetectionScreen({ state, dispatch }) {
   // Transcribe — fetch + go to transcript screen
   async function handleTranscribe() {
     setBusyOp('transcribe');
-    dispatch({ type: 'CLEAR_ERROR' });
+    clearError();
     try {
       await ensureTranscript();
-      dispatch({ type: 'SET_SCREEN', screen: SCREENS.TRANSCRIPT_ACTIONS });
+      setScreen(SCREENS.TRANSCRIPT_ACTIONS);
     } catch (err) {
-      dispatch({ type: 'SET_ERROR', error: err.message });
+      setError(err.message);
       setBusyOp(null);
     }
   }
@@ -171,15 +176,15 @@ export function DetectionScreen({ state, dispatch }) {
   // AI Powered Insights → Call Intelligence screen
   async function handleInsights() {
     setBusyOp('insights');
-    dispatch({ type: 'CLEAR_ERROR' });
+    clearError();
     try {
-      const transcript = await ensureTranscript();
-      dispatch({ type: 'CALL_INTELLIGENCE_LOADING' });
-      dispatch({ type: 'SET_SCREEN', screen: SCREENS.INTELLIGENCE });
-      const ci = await analyzeCallIntelligence(transcript, state.meetingId, state.settings?.claudeApiKey);
-      dispatch({ type: 'CALL_INTELLIGENCE_LOADED', callIntelligence: ci });
+      const tx = await ensureTranscript();
+      setCallIntelligence('loading');
+      setScreen(SCREENS.INTELLIGENCE);
+      const ci = await analyzeCallIntelligence(tx, meetingId, settings?.claudeApiKey);
+      setCallIntelligence(ci);
     } catch (err) {
-      dispatch({ type: 'SET_ERROR', error: err.message });
+      setError(err.message);
       setBusyOp(null);
     }
   }
@@ -187,12 +192,12 @@ export function DetectionScreen({ state, dispatch }) {
   // AI Powered Actionables → Product Gaps screen
   async function handleActionables() {
     setBusyOp('actionables');
-    dispatch({ type: 'CLEAR_ERROR' });
+    clearError();
     try {
       await ensureTranscript();
-      dispatch({ type: 'SET_SCREEN', screen: SCREENS.ANALYSIS });
+      setScreen(SCREENS.ANALYSIS);
     } catch (err) {
-      dispatch({ type: 'SET_ERROR', error: err.message });
+      setError(err.message);
     } finally {
       setBusyOp(null);
     }
@@ -201,12 +206,12 @@ export function DetectionScreen({ state, dispatch }) {
   // Meeting Minutes screen
   async function handleMOM() {
     setBusyOp('mom');
-    dispatch({ type: 'CLEAR_ERROR' });
+    clearError();
     try {
       await ensureTranscript();
-      dispatch({ type: 'SET_SCREEN', screen: SCREENS.MOM });
+      setScreen(SCREENS.MOM);
     } catch (err) {
-      dispatch({ type: 'SET_ERROR', error: err.message });
+      setError(err.message);
     } finally {
       setBusyOp(null);
     }
@@ -215,12 +220,12 @@ export function DetectionScreen({ state, dispatch }) {
   // Demo Scope Advisor
   async function handleDemoScope() {
     setBusyOp('demo_scope');
-    dispatch({ type: 'CLEAR_ERROR' });
+    clearError();
     try {
       await ensureTranscript();
-      dispatch({ type: 'SET_SCREEN', screen: SCREENS.DEMO_SCOPE });
+      setScreen(SCREENS.DEMO_SCOPE);
     } catch (err) {
-      dispatch({ type: 'SET_ERROR', error: err.message });
+      setError(err.message);
     } finally {
       setBusyOp(null);
     }
@@ -229,16 +234,16 @@ export function DetectionScreen({ state, dispatch }) {
   // Exec Summary
   async function handleExecSummary() {
     setBusyOp('exec_summary');
-    dispatch({ type: 'CLEAR_ERROR' });
+    clearError();
     try {
-      const transcript = await ensureTranscript();
-      dispatch({ type: 'EXEC_SUMMARY_LOADING' });
-      dispatch({ type: 'SET_SCREEN', screen: SCREENS.EXEC_SUMMARY });
-      generateExecSummary(transcript, state.meetingId, state.settings?.claudeApiKey)
-        .then(result => dispatch({ type: 'EXEC_SUMMARY_LOADED', execSummary: result }))
-        .catch(err => dispatch({ type: 'EXEC_SUMMARY_FAILED', error: err.message }));
+      const tx = await ensureTranscript();
+      setExecSummaryLoading();
+      setScreen(SCREENS.EXEC_SUMMARY);
+      generateExecSummary(tx, meetingId, settings?.claudeApiKey)
+        .then(result => setExecSummary(result))
+        .catch(err => setExecSummaryError(err.message));
     } catch (err) {
-      dispatch({ type: 'SET_ERROR', error: err.message });
+      setError(err.message);
       setBusyOp(null);
     }
   }
@@ -246,12 +251,12 @@ export function DetectionScreen({ state, dispatch }) {
   // Solution Framework
   async function handleSolutionFramework() {
     setBusyOp('solution_framework');
-    dispatch({ type: 'CLEAR_ERROR' });
+    clearError();
     try {
       await ensureTranscript();
-      dispatch({ type: 'SET_SCREEN', screen: SCREENS.SOLUTION_FRAMEWORK });
+      setScreen(SCREENS.SOLUTION_FRAMEWORK);
     } catch (err) {
-      dispatch({ type: 'SET_ERROR', error: err.message });
+      setError(err.message);
     } finally {
       setBusyOp(null);
     }
@@ -260,19 +265,19 @@ export function DetectionScreen({ state, dispatch }) {
   // Chat with Call screen
   async function handleChat() {
     setBusyOp('chat');
-    dispatch({ type: 'CLEAR_ERROR' });
+    clearError();
     try {
       await ensureTranscript();
-      dispatch({ type: 'SET_SCREEN', screen: SCREENS.CHAT });
+      setScreen(SCREENS.CHAT);
     } catch (err) {
-      dispatch({ type: 'SET_ERROR', error: err.message });
+      setError(err.message);
     } finally {
       setBusyOp(null);
     }
   }
 
-  const isBusy        = busyOp !== null;
-  const transcriptLoaded = !!state.transcript;
+  const isBusy           = busyOp !== null;
+  const transcriptReady  = !!transcript;
 
   return (
     <div style={{
@@ -322,7 +327,7 @@ export function DetectionScreen({ state, dispatch }) {
         {status === STATUS.FOUND && (
           <>
             {/* Status banner — changes after sync */}
-            {transcriptLoaded ? (
+            {transcriptReady ? (
               <div style={{
                 display: 'flex', alignItems: 'center', gap: 10,
                 padding: '11px 14px', borderRadius: 8,
@@ -335,7 +340,7 @@ export function DetectionScreen({ state, dispatch }) {
                     Transcript Ready
                   </div>
                   <div style={{ fontSize: 12, fontWeight: 600, color: NAVY, marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {state.callTitle || state.meetingId}
+                    {callTitle || meetingId}
                   </div>
                 </div>
               </div>
@@ -357,14 +362,14 @@ export function DetectionScreen({ state, dispatch }) {
                     Mindtickle Call Detected
                   </div>
                   <div style={{ fontSize: 12, fontWeight: 600, color: NAVY, marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {state.callTitle || state.meetingId}
+                    {callTitle || meetingId}
                   </div>
                 </div>
               </div>
             )}
 
             {/* Sync button — only show when transcript not yet loaded */}
-            {!transcriptLoaded && (
+            {!transcriptReady && (
               <button
                 type="button"
                 disabled={isBusy}
@@ -386,7 +391,7 @@ export function DetectionScreen({ state, dispatch }) {
                 onMouseLeave={(e) => { if (!isBusy) e.currentTarget.style.background = ORANGE; }}
               >
                 {busyOp === 'sync'
-                  ? <span style={{ width: 13, height: 13, border: '2px solid rgba(255,255,255,0.3)', borderTopColor: '#fff', borderRadius: '50%', animation: 'spin 0.7s linear infinite', display: 'inline-block' }} />
+                  ? <Spinner size={13} color="#fff" trackColor="rgba(255,255,255,0.3)" />
                   : <RotateCcw size={13} strokeWidth={2.5} />
                 }
                 {busyOp === 'sync' ? 'Syncing...' : 'Sync Mindtickle'}
@@ -417,7 +422,7 @@ export function DetectionScreen({ state, dispatch }) {
               <QuickActionRow
                 icon={FileText}
                 title="View Transcript"
-                disabled={isBusy || !transcriptLoaded}
+                disabled={isBusy || !transcriptReady}
                 loading={busyOp === 'transcribe'}
                 onClick={handleTranscribe}
               />
@@ -473,7 +478,7 @@ export function DetectionScreen({ state, dispatch }) {
                 loading={busyOp === 'actionables'}
                 onClick={handleActionables}
               />
-              {state.transcript && (
+              {transcript && (
                 <div style={{ position: 'relative' }} ref={reportDlRef}>
                   <div
                     onClick={() => !isBusy && setReportDlOpen(v => !v)}
@@ -509,7 +514,7 @@ export function DetectionScreen({ state, dispatch }) {
                         { fmt: 'txt', label: 'Plain Text',        ext: '.txt' },
                       ].map(({ fmt, label, ext }) => (
                         <button key={fmt} type="button"
-                          onClick={() => { downloadFullReport(state, fmt); setReportDlOpen(false); }}
+                          onClick={() => { downloadFullReport(useStore.getState(), fmt); setReportDlOpen(false); }}
                           style={{
                             width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                             padding: '10px 14px', background: 'none', border: 'none', cursor: 'pointer',
@@ -530,10 +535,10 @@ export function DetectionScreen({ state, dispatch }) {
               )}
             </div>
 
-            {state.error && (
+            {error && (
               <div className="banner error anim-slide-up" style={{ marginTop: 12 }}>
                 <AlertTriangle size={12} style={{ flexShrink: 0, marginTop: 1 }} />
-                {state.error}
+                {error}
               </div>
             )}
           </>
@@ -608,7 +613,7 @@ export function DetectionScreen({ state, dispatch }) {
               </button>
               <button
                 type="button"
-                onClick={() => dispatch({ type: 'SET_SCREEN', screen: SCREENS.SETTINGS })}
+                onClick={() => setScreen(SCREENS.SETTINGS)}
                 style={{
                   flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
                   height: 40, borderRadius: 8,
@@ -629,7 +634,7 @@ export function DetectionScreen({ state, dispatch }) {
             <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#8A97A8', marginBottom: 8 }}>
               API Connections
             </div>
-            <APIStatusCard settings={state.settings} />
+            <APIStatusCard settings={settings} />
           </div>
         )}
       </div>

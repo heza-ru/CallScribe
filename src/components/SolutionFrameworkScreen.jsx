@@ -1,11 +1,15 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { RefreshCw, Compass, Users, Zap, Shield, ChevronRight, CheckCircle, XCircle, AlertCircle, ArrowLeft } from 'lucide-react';
+import { RefreshCw, Compass, Users, Zap, Shield, ChevronRight, CheckCircle, XCircle, AlertCircle, ArrowLeft, Download } from 'lucide-react';
 import { getSolutionFrameworkRecommendation, analyzeSolutionFramework } from '../services/claudeService';
-
-const ORANGE = '#E55014';
-const NAVY   = '#0D1726';
+import { downloadSolutionFramework } from '../utils/analysisFormatter';
+import { ORANGE, NAVY } from '../constants';
+import { Spinner } from './ui/Spinner';
+import { TabBar } from './ui/TabBar';
+import { useClickOutside } from '../hooks/useClickOutside';
+import { mdComponents } from '../utils/markdownComponents';
+import { useStore } from '../store';
 
 const FIT_COLORS = { strong: '#16a34a', moderate: '#d97706', weak: '#dc2626' };
 const FIT_BG     = { strong: '#f0fdf4', moderate: '#fffbeb', weak: '#fef2f2' };
@@ -45,6 +49,7 @@ const FRAMEWORK_DEFS = {
 };
 
 const ANALYSIS_TABS = [
+  { key: 'overview',   label: 'Overview'    },
   { key: 'signals',    label: 'Signals'     },
   { key: 'mapping',    label: 'Mapping'     },
   { key: 'objections', label: 'Objections'  },
@@ -53,30 +58,6 @@ const ANALYSIS_TABS = [
 ];
 
 // ── Sub-components ────────────────────────────────────────────────
-
-function TabBar({ tabs, active, onSelect }) {
-  return (
-    <div style={{ display: 'flex', gap: 2, borderBottom: '1px solid #E8EDF2', paddingLeft: 16, flexShrink: 0 }}>
-      {tabs.map(t => (
-        <button
-          key={t.key}
-          onClick={() => onSelect(t.key)}
-          style={{
-            padding: '8px 12px',
-            fontSize: 11, fontWeight: 600,
-            border: 'none', background: 'none', cursor: 'pointer',
-            color: active === t.key ? ORANGE : '#6B7A8D',
-            borderBottom: active === t.key ? `2px solid ${ORANGE}` : '2px solid transparent',
-            marginBottom: -1,
-            transition: 'color 120ms',
-          }}
-        >
-          {t.label}
-        </button>
-      ))}
-    </div>
-  );
-}
 
 function SignalRow({ signal, found, evidence }) {
   const color = found ? '#16a34a' : '#c4cdd6';
@@ -89,9 +70,9 @@ function SignalRow({ signal, found, evidence }) {
     }}>
       <Icon size={14} color={color} style={{ flexShrink: 0, marginTop: 1 }} />
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 12, fontWeight: 600, color: found ? NAVY : '#9ca3af' }}>{signal}</div>
+        <div style={{ fontSize: 12, fontWeight: 600, color: found ? NAVY : '#9ca3af', wordBreak: 'break-word' }}>{signal}</div>
         {evidence && (
-          <div style={{ fontSize: 11, color: '#6B7A8D', marginTop: 3, fontStyle: 'italic', lineHeight: 1.4 }}>
+          <div style={{ fontSize: 11, color: '#6B7A8D', marginTop: 3, fontStyle: 'italic', lineHeight: 1.4, wordBreak: 'break-word' }}>
             "{evidence}"
           </div>
         )}
@@ -114,9 +95,9 @@ function MappingRow({ pain, capability, addressed }) {
           : <AlertCircle size={13} color="#d97706" style={{ flexShrink: 0 }} />
         }
       </div>
-      <div style={{ fontSize: 12, color: NAVY, marginBottom: 8, lineHeight: 1.4 }}>{pain}</div>
+      <div style={{ fontSize: 12, color: NAVY, marginBottom: 8, lineHeight: 1.4, wordBreak: 'break-word' }}>{pain}</div>
       <div style={{ fontSize: 10, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>Capability</div>
-      <div style={{ fontSize: 12, color: '#2563eb', lineHeight: 1.4 }}>{capability}</div>
+      <div style={{ fontSize: 12, color: '#2563eb', lineHeight: 1.4, wordBreak: 'break-word' }}>{capability}</div>
     </div>
   );
 }
@@ -136,13 +117,13 @@ function ObjectionCard({ objection, suggestedResponse }) {
         }}
       >
         <AlertCircle size={13} color="#d97706" style={{ flexShrink: 0 }} />
-        <span style={{ flex: 1, fontSize: 12, fontWeight: 600, color: NAVY }}>{objection}</span>
+        <span style={{ flex: 1, fontSize: 12, fontWeight: 600, color: NAVY, minWidth: 0, wordBreak: 'break-word' }}>{objection}</span>
         <ChevronRight size={13} color="#9ca3af" style={{ transform: open ? 'rotate(90deg)' : 'none', transition: 'transform 120ms', flexShrink: 0 }} />
       </button>
       {open && (
         <div style={{ padding: '0 12px 12px 33px', background: '#F5F7FA' }}>
           <div style={{ fontSize: 10, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>Suggested Response</div>
-          <div style={{ fontSize: 12, color: '#374151', lineHeight: 1.5 }}>{suggestedResponse}</div>
+          <div style={{ fontSize: 12, color: '#374151', lineHeight: 1.5, wordBreak: 'break-word' }}>{suggestedResponse}</div>
         </div>
       )}
     </div>
@@ -152,7 +133,7 @@ function ObjectionCard({ objection, suggestedResponse }) {
 // ── Detail page ───────────────────────────────────────────────────
 
 function DetailPage({ type, analysis, onBack }) {
-  const [tab, setTab] = useState('signals');
+  const [tab, setTab] = useState('overview');
   const def = FRAMEWORK_DEFS[type];
   const Icon = def.icon;
   const fit = analysis?.overallFit || 'moderate';
@@ -188,8 +169,8 @@ function DetailPage({ type, analysis, onBack }) {
           <Icon size={14} color={def.color} strokeWidth={2.5} />
         </div>
 
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 12, fontWeight: 800, color: NAVY }}>
+        <div style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
+          <div style={{ fontSize: 12, fontWeight: 800, color: NAVY, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
             {type} — {def.label}
           </div>
           <div style={{ fontSize: 10, color: '#9ca3af' }}>{def.subtitle}</div>
@@ -199,14 +180,7 @@ function DetailPage({ type, analysis, onBack }) {
       {/* Loading state */}
       {analysis === 'loading' && (
         <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 12 }}>
-          <span style={{
-            width: 20, height: 20,
-            border: '2.5px solid rgba(0,0,0,0.08)',
-            borderTopColor: ORANGE,
-            borderRadius: '50%',
-            animation: 'spin 0.8s linear infinite',
-            display: 'inline-block',
-          }} />
+          <Spinner size={20} color={ORANGE} trackColor="rgba(0,0,0,0.08)" />
           <span style={{ fontSize: 12, fontWeight: 500, color: '#9ca3af' }}>
             Analyzing call against {type} framework…
           </span>
@@ -217,39 +191,93 @@ function DetailPage({ type, analysis, onBack }) {
       {analysis && analysis !== 'loading' && (
         <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
 
-          {/* Fit + competitive banners */}
-          <div style={{ padding: '12px 16px 0', flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <div style={{
-              padding: '10px 12px', borderRadius: 8,
-              background: FIT_BG[fit], border: `1px solid ${FIT_BORDER[fit]}`,
-              display: 'flex', alignItems: 'flex-start', gap: 10,
-            }}>
-              <div style={{
-                fontSize: 10, fontWeight: 700, color: FIT_COLORS[fit],
-                background: '#fff', border: `1px solid ${FIT_BORDER[fit]}`,
-                padding: '2px 7px', borderRadius: 5, flexShrink: 0, marginTop: 1,
-              }}>
-                {FIT_LABELS[fit]}
-              </div>
-              <div style={{ fontSize: 12, color: '#374151', lineHeight: 1.5 }}>{analysis.fitReason}</div>
-            </div>
-
-            {analysis.competitiveContext && analysis.competitiveContext !== 'No competitors mentioned' && (
-              <div style={{
-                padding: '8px 12px', borderRadius: 6,
-                background: '#fff7ed', border: '1px solid #fed7aa',
-                fontSize: 12, color: '#92400e',
-              }}>
-                <span style={{ fontWeight: 700 }}>Competitive: </span>{analysis.competitiveContext}
-              </div>
-            )}
-          </div>
-
-          <div style={{ marginTop: 12 }}>
-            <TabBar tabs={ANALYSIS_TABS} active={tab} onSelect={setTab} />
+          <div style={{ marginTop: 0 }}>
+            <TabBar tabs={ANALYSIS_TABS} active={tab} onSelect={setTab} compact activeColor={ORANGE} />
           </div>
 
           <div style={{ flex: 1, overflowY: 'auto', padding: '12px 16px' }}>
+
+            {tab === 'overview' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {/* Fit banner */}
+                <div style={{
+                  padding: '12px 14px', borderRadius: 8,
+                  background: FIT_BG[fit], border: `1px solid ${FIT_BORDER[fit]}`,
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                    <div style={{
+                      fontSize: 10, fontWeight: 700, color: FIT_COLORS[fit],
+                      background: '#fff', border: `1px solid ${FIT_BORDER[fit]}`,
+                      padding: '2px 7px', borderRadius: 5,
+                    }}>
+                      {FIT_LABELS[fit]}
+                    </div>
+                  </div>
+                  <div style={{ fontSize: 12, color: '#374151', lineHeight: 1.5, wordBreak: 'break-word' }}>{analysis.fitReason}</div>
+                </div>
+
+                {/* Competitor context */}
+                {analysis.competitiveContext && analysis.competitiveContext !== 'No competitors mentioned' && (
+                  <div style={{
+                    padding: '12px 14px', borderRadius: 8,
+                    background: '#fff7ed', border: '1px solid #fed7aa',
+                  }}>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: '#92400e', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
+                      Competitor Context
+                    </div>
+                    <div style={{ fontSize: 12, color: '#92400e', lineHeight: 1.5, wordBreak: 'break-word' }}>{analysis.competitiveContext}</div>
+                  </div>
+                )}
+
+                {/* Signals summary */}
+                {analysis.qualificationSignals && (
+                  <div style={{
+                    padding: '12px 14px', borderRadius: 8,
+                    background: '#FAFBFC', border: '1px solid #E8EDF2',
+                  }}>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
+                      Qualification Signals — {analysis.qualificationSignals.filter(s => s.found).length} / {analysis.qualificationSignals.length} present
+                    </div>
+                    {analysis.qualificationSignals.map((s, i) => {
+                      const color = s.found ? '#16a34a' : '#c4cdd6';
+                      const SIcon = s.found ? CheckCircle : XCircle;
+                      return (
+                        <div key={i} style={{
+                          display: 'flex', gap: 8, padding: '6px 0',
+                          borderBottom: i < analysis.qualificationSignals.length - 1 ? '1px solid #F0F4F8' : 'none',
+                          alignItems: 'flex-start',
+                        }}>
+                          <SIcon size={13} color={color} style={{ flexShrink: 0, marginTop: 1 }} />
+                          <div style={{ fontSize: 12, fontWeight: 600, color: s.found ? NAVY : '#9ca3af', wordBreak: 'break-word' }}>{s.signal}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Discovery gaps */}
+                {analysis.discoveryGaps && analysis.discoveryGaps.length > 0 && (
+                  <div style={{
+                    padding: '12px 14px', borderRadius: 8,
+                    background: '#FAFBFC', border: '1px solid #E8EDF2',
+                  }}>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
+                      Discovery Gaps
+                    </div>
+                    {analysis.discoveryGaps.map((g, i) => (
+                      <div key={i} style={{
+                        display: 'flex', gap: 8, padding: '6px 0',
+                        borderBottom: i < analysis.discoveryGaps.length - 1 ? '1px solid #F0F4F8' : 'none',
+                        alignItems: 'flex-start',
+                      }}>
+                        <div style={{ width: 4, height: 4, borderRadius: '50%', background: '#d97706', marginTop: 6, flexShrink: 0 }} />
+                        <div style={{ fontSize: 12, color: '#374151', wordBreak: 'break-word' }}>{g}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
 
             {tab === 'signals' && (
               <div>
@@ -327,39 +355,7 @@ function DetailPage({ type, analysis, onBack }) {
 
             {tab === 'demo' && (
               <div style={{ fontSize: 12, color: '#374151', lineHeight: 1.7 }}>
-                <ReactMarkdown
-                  remarkPlugins={[remarkGfm]}
-                  components={{
-                    h3: ({ children }) => (
-                      <h3 style={{ fontSize: 11.5, fontWeight: 700, color: NAVY, margin: '14px 0 5px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                        {children}
-                      </h3>
-                    ),
-                    p: ({ children }) => (
-                      <p style={{ fontSize: 12, color: '#374151', lineHeight: 1.7, margin: '0 0 10px' }}>
-                        {children}
-                      </p>
-                    ),
-                    ul: ({ children }) => (
-                      <ul style={{ margin: '0 0 10px', paddingLeft: 16, display: 'flex', flexDirection: 'column', gap: 4 }}>
-                        {children}
-                      </ul>
-                    ),
-                    ol: ({ children }) => (
-                      <ol style={{ margin: '0 0 10px', paddingLeft: 16, display: 'flex', flexDirection: 'column', gap: 4 }}>
-                        {children}
-                      </ol>
-                    ),
-                    li: ({ children }) => (
-                      <li style={{ fontSize: 12, color: '#374151', lineHeight: 1.6 }}>
-                        {children}
-                      </li>
-                    ),
-                    strong: ({ children }) => (
-                      <strong style={{ fontWeight: 700, color: NAVY }}>{children}</strong>
-                    ),
-                  }}
-                >
+                <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>
                   {analysis.demoFocus || 'No demo recommendations available.'}
                 </ReactMarkdown>
               </div>
@@ -384,14 +380,7 @@ function CardListPage({ recommendation, isLoadingRec, onSelectType, onReanalyze 
           padding: '12px 14px', borderRadius: 8,
           background: '#F5F7FA', border: '1px solid #E8EDF2',
         }}>
-          <span style={{
-            width: 14, height: 14,
-            border: '2px solid rgba(0,0,0,0.08)',
-            borderTopColor: ORANGE,
-            borderRadius: '50%',
-            animation: 'spin 0.8s linear infinite',
-            display: 'inline-block', flexShrink: 0,
-          }} />
+          <Spinner size={14} color={ORANGE} trackColor="rgba(0,0,0,0.08)" />
           <span style={{ fontSize: 12, fontWeight: 500, color: '#6B7A8D' }}>
             Identifying best-fit framework…
           </span>
@@ -435,9 +424,9 @@ function CardListPage({ recommendation, isLoadingRec, onSelectType, onReanalyze 
           <div style={{ fontSize: 12, fontWeight: 700, color: NAVY, marginBottom: 3 }}>
             {FRAMEWORK_DEFS[recommendation.type]?.label} ({recommendation.type})
           </div>
-          <div style={{ fontSize: 12, color: '#374151', lineHeight: 1.5 }}>{recommendation.reason}</div>
+          <div style={{ fontSize: 12, color: '#374151', lineHeight: 1.5, wordBreak: 'break-word' }}>{recommendation.reason}</div>
           {recommendation.alternativeType && (
-            <div style={{ marginTop: 5, fontSize: 11, color: '#6B7A8D' }}>
+            <div style={{ marginTop: 5, fontSize: 11, color: '#6B7A8D', wordBreak: 'break-word' }}>
               <span style={{ fontWeight: 600 }}>Also consider:</span> {recommendation.alternativeType} — {recommendation.alternativeReason}
             </div>
           )}
@@ -491,7 +480,7 @@ function CardListPage({ recommendation, isLoadingRec, onSelectType, onReanalyze 
                 )}
               </div>
               <div style={{ fontSize: 10, fontWeight: 700, color: def.color, marginBottom: 4 }}>{def.subtitle}</div>
-              <div style={{ fontSize: 11, color: '#6B7A8D', lineHeight: 1.5 }}>{def.desc}</div>
+              <div style={{ fontSize: 11, color: '#6B7A8D', lineHeight: 1.5, wordBreak: 'break-word' }}>{def.desc}</div>
             </div>
 
             <ChevronRight size={15} color="#C8D2DE" style={{ flexShrink: 0 }} />
@@ -504,11 +493,22 @@ function CardListPage({ recommendation, isLoadingRec, onSelectType, onReanalyze 
 
 // ── Main screen ───────────────────────────────────────────────────
 
-export function SolutionFrameworkScreen({ state, dispatch }) {
-  const [detailType, setDetailType] = useState(null);
+export function SolutionFrameworkScreen() {
+  const transcript                 = useStore(s => s.transcript);
+  const settings                   = useStore(s => s.settings);
+  const meetingId                  = useStore(s => s.meetingId);
+  const solutionFramework          = useStore(s => s.solutionFramework);
+  const solutionFrameworkAnalyses  = useStore(s => s.solutionFrameworkAnalyses);
+  const setSolutionFramework       = useStore(s => s.setSolutionFramework);
+  const setSolutionFrameworkAnalysis = useStore(s => s.setSolutionFrameworkAnalysis);
 
-  const { transcript, solutionFramework, solutionFrameworkAnalyses, settings } = state;
+  const [detailType, setDetailType] = useState(null);
+  const [dlOpen, setDlOpen] = useState(false);
+  const dlRef = useRef(null);
+
   const apiKey = settings?.claudeApiKey;
+
+  useClickOutside(dlRef, dlOpen ? () => setDlOpen(false) : null);
 
   const isLoadingRec = solutionFramework === 'loading';
   const recommendation = solutionFramework && solutionFramework !== 'loading' ? solutionFramework : null;
@@ -528,27 +528,27 @@ export function SolutionFrameworkScreen({ state, dispatch }) {
   }, [detailType]);
 
   async function runRecommendation() {
-    dispatch({ type: 'SOLUTION_FRAMEWORK_LOADING' });
+    setSolutionFramework('loading');
     try {
       const result = await getSolutionFrameworkRecommendation(transcript, apiKey);
-      dispatch({ type: 'SOLUTION_FRAMEWORK_LOADED', data: result });
+      setSolutionFramework(result);
     } catch {
-      dispatch({ type: 'SOLUTION_FRAMEWORK_FAILED' });
+      setSolutionFramework(null);
     }
   }
 
   async function runAnalysis(type) {
-    dispatch({ type: 'SOLUTION_FRAMEWORK_ANALYSIS_LOADING', frameworkType: type });
+    setSolutionFrameworkAnalysis(type, 'loading');
     try {
       const result = await analyzeSolutionFramework(transcript, type, apiKey);
-      dispatch({ type: 'SOLUTION_FRAMEWORK_ANALYSIS_LOADED', frameworkType: type, data: result });
+      setSolutionFrameworkAnalysis(type, result);
     } catch {
-      dispatch({ type: 'SOLUTION_FRAMEWORK_ANALYSIS_FAILED', frameworkType: type });
+      setSolutionFrameworkAnalysis(type, null);
     }
   }
 
   function handleReanalyze() {
-    dispatch({ type: 'SOLUTION_FRAMEWORK_FAILED' });
+    setSolutionFramework(null);
     setTimeout(() => runRecommendation(), 50);
   }
 
@@ -566,9 +566,62 @@ export function SolutionFrameworkScreen({ state, dispatch }) {
         display: 'flex', alignItems: 'center', gap: 10,
       }}>
         <Compass size={15} color={ORANGE} strokeWidth={2.5} />
-        <span style={{ fontSize: 12, fontWeight: 800, color: NAVY, letterSpacing: '0.07em', textTransform: 'uppercase' }}>
+        <span style={{ fontSize: 12, fontWeight: 800, color: NAVY, letterSpacing: '0.07em', textTransform: 'uppercase', flex: 1 }}>
           Solution Framework
         </span>
+        <div style={{ position: 'relative' }} ref={dlRef}>
+          <button
+            type="button"
+            onClick={() => setDlOpen(v => !v)}
+            disabled={!recommendation && Object.values(solutionFrameworkAnalyses).every(v => !v || v === 'loading')}
+            style={{
+              background: 'none', border: 'none', cursor: 'pointer', padding: 6,
+              borderRadius: 6, display: 'flex', color: '#8A97A8',
+              opacity: (!recommendation && Object.values(solutionFrameworkAnalyses).every(v => !v || v === 'loading')) ? 0.4 : 1,
+            }}
+            onMouseEnter={e => { e.currentTarget.style.color = ORANGE; }}
+            onMouseLeave={e => { e.currentTarget.style.color = '#8A97A8'; }}
+          >
+            <Download size={14} strokeWidth={2} />
+          </button>
+          {dlOpen && (
+            <div style={{
+              position: 'absolute', top: 'calc(100% + 6px)', right: 0, zIndex: 50,
+              background: '#fff', borderRadius: 10, border: '1px solid #E4E9F0',
+              boxShadow: '0 8px 24px rgba(13,23,38,0.10)', overflow: 'hidden', minWidth: 175,
+            }}>
+              <div style={{ padding: '8px 12px 6px', fontSize: 9.5, fontWeight: 700, color: '#A8B4C0', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                Export
+              </div>
+              {[
+                { fmt: 'md',   label: 'Markdown',          ext: '.md'   },
+                { fmt: 'json', label: 'JSON',               ext: '.json' },
+                { fmt: 'doc',  label: 'Word / Google Docs', ext: '.doc'  },
+                { fmt: 'txt',  label: 'Plain Text',         ext: '.txt'  },
+              ].map(({ fmt, label, ext }) => (
+                <button
+                  key={fmt}
+                  type="button"
+                  onClick={() => {
+                    downloadSolutionFramework(recommendation, solutionFrameworkAnalyses, meetingId, fmt);
+                    setDlOpen(false);
+                  }}
+                  style={{
+                    width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    padding: '9px 14px', background: 'none', border: 'none', cursor: 'pointer',
+                    borderTop: '1px solid #F5F7FA', fontSize: 12, fontFamily: 'var(--font-sans)',
+                    fontWeight: 600, color: NAVY, textAlign: 'left', gap: 16,
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.background = '#F5F7FA'; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = 'none'; }}
+                >
+                  <span>{label}</span>
+                  <span style={{ fontSize: 10, color: '#8A97A8', fontWeight: 500 }}>{ext}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Page content */}

@@ -1,4 +1,5 @@
 import { parseChunks, formatTimestamp } from './mindtickleParser';
+import { triggerDownload } from './analysisFormatter';
 
 /**
  * Convert transcript chunks to plain text.
@@ -132,13 +133,5 @@ export function downloadTranscript(chunks, meetingId, format) {
       ext = 'txt';
   }
 
-  const blob = new Blob([content], { type: mimeType });
-  const url = URL.createObjectURL(blob);
-  const filename = `transcript-${meetingId}.${ext}`;
-
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
+  triggerDownload(content, `transcript-${meetingId}.${ext}`, mimeType);
 }

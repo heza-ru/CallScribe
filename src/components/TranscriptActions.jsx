@@ -1,14 +1,14 @@
-import { useState, useMemo, useRef, useEffect } from 'react';
+import { useState, useMemo, useRef } from 'react';
 import {
   Download, Sparkles, TicketCheck,
   CheckCircle2, Users, AlignLeft, Clock, ChevronDown, Search, X,
 } from 'lucide-react';
 import { analyzeTranscript, analyzeCallIntelligence } from '../services/claudeService';
 import { downloadTranscript } from '../utils/transcriptFormatter';
-import { SCREENS } from '../constants';
-
-const ORANGE = '#E55014';
-const NAVY   = '#0D1726';
+import { SCREENS, ORANGE, NAVY } from '../constants';
+import { Spinner } from './ui/Spinner';
+import { useClickOutside } from '../hooks/useClickOutside';
+import { useStore } from '../store';
 
 const FORMATS = [
   { fmt: 'txt',  label: 'Plain Text',      ext: '.txt' },
@@ -57,7 +57,16 @@ function HighlightText({ text, query }) {
   );
 }
 
-export function TranscriptActions({ state, dispatch }) {
+export function TranscriptActions() {
+  const transcript      = useStore(s => s.transcript);
+  const chunks          = useStore(s => s.chunks);
+  const meetingId       = useStore(s => s.meetingId);
+  const settings        = useStore(s => s.settings);
+  const insights        = useStore(s => s.insights);
+  const setScreen       = useStore(s => s.setScreen);
+  const setCallIntelligence = useStore(s => s.setCallIntelligence);
+  const insightsLoaded  = useStore(s => s.insightsLoaded);
+
   const [analyzing,    setAnalyzing]    = useState(false);
   const [error,        setError]        = useState(null);
   const [downloadOpen, setDownloadOpen] = useState(false);
@@ -66,19 +75,10 @@ export function TranscriptActions({ state, dispatch }) {
   const downloadRef = useRef(null);
   const searchRef   = useRef(null);
 
-  useEffect(() => {
-    if (!downloadOpen) return;
-    function onDown(e) {
-      if (downloadRef.current && !downloadRef.current.contains(e.target)) {
-        setDownloadOpen(false);
-      }
-    }
-    document.addEventListener('mousedown', onDown);
-    return () => document.removeEventListener('mousedown', onDown);
-  }, [downloadOpen]);
+  useClickOutside(downloadRef, downloadOpen ? () => setDownloadOpen(false) : null);
 
   const { wordCount, blocks, speakers, estimatedMins } = useMemo(() => {
-    const text = state.transcript || '';
+    const text = transcript || '';
     const words = text.split(/\s+/).filter(Boolean);
     const rawLines = text.split('\n').filter(l => l.trim());
     const spk = [];
@@ -91,7 +91,6 @@ export function TranscriptActions({ state, dispatch }) {
       }
     });
     // Derive duration from actual chunk timestamps when available
-    const chunks = state.chunks;
     let mins = Math.max(1, Math.round(words.length / 130));
     if (Array.isArray(chunks) && chunks.length > 0) {
       const lastChunk = chunks[chunks.length - 1];
@@ -101,24 +100,23 @@ export function TranscriptActions({ state, dispatch }) {
       }
     }
     return { wordCount: words.length, blocks: groupLines(rawLines), speakers: spk, estimatedMins: mins };
-  }, [state.transcript, state.chunks]);
+  }, [transcript, chunks]);
 
   async function handleAnalyze() {
     setError(null);
     setAnalyzing(true);
 
-    const { transcript, meetingId, settings } = state;
     const apiKey = settings?.claudeApiKey;
 
-    dispatch({ type: 'CALL_INTELLIGENCE_LOADING' });
+    setCallIntelligence('loading');
     analyzeCallIntelligence(transcript, meetingId, apiKey)
-      .then(ci => dispatch({ type: 'CALL_INTELLIGENCE_LOADED', callIntelligence: ci }))
-      .catch(() => dispatch({ type: 'CALL_INTELLIGENCE_FAILED' }));
+      .then(ci => setCallIntelligence(ci))
+      .catch(() => setCallIntelligence(null));
 
     try {
-      const insights = await analyzeTranscript(transcript, meetingId, apiKey);
-      dispatch({ type: 'INSIGHTS_LOADED', insights });
-      dispatch({ type: 'SET_SCREEN', screen: SCREENS.ANALYSIS });
+      const newInsights = await analyzeTranscript(transcript, meetingId, apiKey);
+      insightsLoaded(newInsights);
+      setScreen(SCREENS.ANALYSIS);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -127,7 +125,7 @@ export function TranscriptActions({ state, dispatch }) {
   }
 
   function handleDownload(fmt) {
-    downloadTranscript(state.chunks, state.meetingId, fmt);
+    downloadTranscript(chunks, meetingId, fmt);
     setDownloaded(fmt);
     setDownloadOpen(false);
     setTimeout(() => setDownloaded(null), 2500);
@@ -151,10 +149,10 @@ export function TranscriptActions({ state, dispatch }) {
             Transcript
           </div>
           <div style={{ fontSize: 10, color: '#8A97A8', marginTop: 1, fontFamily: 'monospace' }}>
-            {state.meetingId}
+            {meetingId}
           </div>
         </div>
-        {state.insights.length > 0 && (
+        {insights.length > 0 && (
           <span style={{
             display: 'flex', alignItems: 'center', gap: 5, padding: '4px 10px',
             background: '#FFF4EF', border: `1px solid rgba(229,80,20,0.20)`,
@@ -162,7 +160,7 @@ export function TranscriptActions({ state, dispatch }) {
             color: ORANGE, textTransform: 'uppercase', letterSpacing: '0.04em',
           }}>
             <TicketCheck size={11} />
-            {state.insights.length} insight{state.insights.length !== 1 ? 's' : ''}
+            {insights.length} insight{insights.length !== 1 ? 's' : ''}
           </span>
         )}
       </div>
@@ -385,7 +383,7 @@ export function TranscriptActions({ state, dispatch }) {
           onMouseLeave={(e) => { if (!analyzing) e.currentTarget.style.background = ORANGE; }}
         >
           {analyzing
-            ? <span style={{ width: 14, height: 14, border: '2px solid rgba(255,255,255,0.3)', borderTopColor: '#fff', borderRadius: '50%', animation: 'spin 0.7s linear infinite', display: 'inline-block' }} />
+            ? <Spinner size={14} color="#fff" trackColor="rgba(255,255,255,0.3)" />
             : <Sparkles size={13} strokeWidth={2.5} />
           }
           {analyzing ? 'Analyzing...' : 'Analyze with Claude'}

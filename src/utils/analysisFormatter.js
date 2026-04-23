@@ -17,6 +17,11 @@ function escape(v) {
   return `"${String(v ?? '').replace(/"/g, '""')}"`;
 }
 
+// Sanitize a value for use in a markdown table cell
+function tc(v) {
+  return String(v ?? '').replace(/\|/g, '\\|').replace(/\n/g, ' ').trim();
+}
+
 function ts() {
   return new Date().toLocaleString();
 }
@@ -185,7 +190,7 @@ export function singleInsightToTXT(insight) {
 
 // ── Download trigger ──────────────────────────────────────────────
 
-function triggerDownload(content, filename, mimeType) {
+export function triggerDownload(content, filename, mimeType) {
   const blob = new Blob([content], { type: mimeType });
   const url  = URL.createObjectURL(blob);
   const a    = document.createElement('a');
@@ -258,6 +263,7 @@ export function intelligenceToMarkdown(ci, meetingId) {
   if (ci.customerSentiment) {
     const s = ci.customerSentiment;
     lines.push('## Sentiment Breakdown');
+    lines.push('');
     lines.push(`| Positive | Neutral | Negative |`);
     lines.push(`|----------|---------|----------|`);
     lines.push(`| ${s.positive}% | ${s.neutral}% | ${s.negative}% |`);
@@ -775,14 +781,13 @@ export function execSummaryToMarkdown(data, meetingId) {
   if (data.useCases)     lines.push('## 2. Use Cases & Product Positioning', '', data.useCases, '', '---', '');
   if (data.features?.length) {
     lines.push('## 3. Feature Demonstration Quality', '');
+    lines.push('| Feature | Module | Use Case | Quality |');
+    lines.push('|---------|--------|----------|---------|');
     data.features.forEach(f => {
-      lines.push(`### ${f.name}`);
-      lines.push(`- Module: ${f.module}`);
-      lines.push(`- Use Case: ${f.useCase}`);
-      lines.push(`- Demo Quality: ${f.quality}${f.valueArticulated ? ' | Value articulated' : ''}`);
-      lines.push('');
+      const quality = `${f.quality || ''}${f.valueArticulated ? ' — value articulated' : ''}`;
+      lines.push(`| ${tc(f.name)} | ${tc(f.module)} | ${tc(f.useCase)} | ${tc(quality)} |`);
     });
-    lines.push('---', '');
+    lines.push('', '---', '');
   }
   if (data.differentiation) {
     const d = data.differentiation;
@@ -807,14 +812,13 @@ export function execSummaryToMarkdown(data, meetingId) {
   }
   if (data.questions?.length) {
     lines.push('## 5. Customer Questions, Objections & Responses', '');
+    lines.push('| # | Question | Category | Quality | Response |');
+    lines.push('|---|----------|----------|---------|----------|');
     data.questions.forEach((q, i) => {
-      lines.push(`### Q${i + 1}: ${q.question}`);
-      lines.push(`- Category: ${Q_CAT_LABEL_MD[q.category] || q.category}`);
-      lines.push(`- Response quality: ${q.quality}${q.urgency === 'now' ? ' — Address Now' : ''}`);
-      if (q.response) lines.push(`- Response: ${q.response}`);
-      lines.push('');
+      const quality = tc(q.quality) + (q.urgency === 'now' ? ' — Address Now' : '');
+      lines.push(`| ${i + 1} | ${tc(q.question)} | ${tc(Q_CAT_LABEL_MD[q.category] || q.category)} | ${quality} | ${tc(q.response)} |`);
     });
-    lines.push('---', '');
+    lines.push('', '---', '');
   }
   if (data.infosec)      lines.push('## 6. InfoSec / Deployment Deep Dive', '', data.infosec, '', '---', '');
   if (data.gaps)         lines.push('## 7. Gaps & Missed Opportunities', '', data.gaps, '', '---', '');
@@ -948,7 +952,7 @@ export function downloadExecSummary(data, meetingId, format) {
 // ═════════════════════════════════════════════════════════════════
 
 export function downloadFullReport(state, format) {
-  const { insights, callIntelligence: ci, competitors, objections, mom, demoScope, chatMessages: messages, meetingId } = state;
+  const { insights, callIntelligence: ci, competitors, objections, mom, demoScope, execSummary, solutionFramework, solutionFrameworkAnalyses, chatMessages: messages, meetingId } = state;
   const mid = (meetingId || 'callscribe').slice(-8);
 
   if (format === 'doc') {
@@ -1083,7 +1087,112 @@ export function downloadFullReport(state, format) {
       body += '<hr>';
     }
 
-    // ── 7. Chat History ───────────────────────────────────────────
+    // ── 7. Executive Demo Analysis ────────────────────────────────
+    if (execSummary && execSummary !== 'loading') {
+      const scoreColors = { 1: '#dc2626', 2: '#f97316', 3: '#d97706', 4: '#16a34a', 5: '#15803d' };
+      const qualColors  = { complete: '#16a34a', partial: '#d97706', deflected: '#f97316', unanswered: '#dc2626' };
+      body += `<h2>Executive Demo Analysis</h2>`;
+      body += `<h3>Demo Effectiveness Scores</h3><table><tr><th>Dimension</th><th>Score</th><th>Rating</th><th>Rationale</th></tr>`;
+      Object.entries(EXEC_SCORE_KEYS).forEach(([key, label]) => {
+        const s = execSummary.scores?.[key];
+        if (!s) return;
+        const col = scoreColors[s.score] || '#6b7280';
+        body += `<tr><td><strong>${escapeHTML(label)}</strong></td><td style="text-align:center;font-weight:bold;color:${col}">${s.score}/5</td><td style="color:${col};font-weight:bold">${EXEC_SCORE_LABELS[s.score] || ''}</td><td>${escapeHTML(s.rationale || '')}</td></tr>`;
+      });
+      body += `</table>`;
+      if (execSummary.executiveSummary?.length) {
+        body += `<h3>Executive Summary</h3><ul>${execSummary.executiveSummary.map(b => `<li>${escapeHTML(b)}</li>`).join('')}</ul>`;
+      }
+      if (execSummary.followUpActions?.length) {
+        body += `<h3>Follow-up Actions</h3><ol>${execSummary.followUpActions.map(a => `<li>${escapeHTML(a)}</li>`).join('')}</ol>`;
+      }
+      if (execSummary.storyline) body += `<h3>1. Demo Storyline &amp; Flow</h3>${execMdToHTML(execSummary.storyline)}`;
+      if (execSummary.useCases)  body += `<h3>2. Use Cases &amp; Product Positioning</h3>${execMdToHTML(execSummary.useCases)}`;
+      if (execSummary.features?.length) {
+        body += `<h3>3. Feature Demonstration Quality</h3><table><tr><th>Feature</th><th>Module</th><th>Use Case</th><th>Quality</th></tr>`;
+        execSummary.features.forEach(f => {
+          const col = f.quality === 'strong' ? '#16a34a' : f.quality === 'moderate' ? '#d97706' : '#dc2626';
+          body += `<tr><td><strong>${escapeHTML(f.name)}</strong></td><td>${escapeHTML(f.module || '')}</td><td>${escapeHTML(f.useCase || '')}</td><td style="color:${col};font-weight:bold">${escapeHTML(f.quality || '')}${f.valueArticulated ? ' — value articulated' : ''}</td></tr>`;
+        });
+        body += `</table>`;
+      }
+      if (execSummary.differentiation) {
+        const d = execSummary.differentiation;
+        body += `<h3>4. Whatfix Differentiation Analysis</h3><p><strong>Why Whatfix?</strong> ${escapeHTML(d.whyWhatfix || '—')} &nbsp;|&nbsp; <strong>vs Others?</strong> ${escapeHTML(d.vsOthers || '—')} &nbsp;|&nbsp; <strong>Overall:</strong> ${escapeHTML(d.overallRating || '—')}</p>`;
+        if (d.shown?.length) { body += `<h4>Differentiators Presented</h4><ul>${d.shown.map(s => `<li><strong>${escapeHTML(s.differentiator)}</strong> — ${escapeHTML(s.positioning)}</li>`).join('')}</ul>`; }
+        if (d.missedNow?.length) { body += `<h4>Could Have Introduced</h4><ul>${d.missedNow.map(s => `<li>${escapeHTML(s)}</li>`).join('')}</ul>`; }
+        if (d.saveLater?.length) { body += `<h4>Save for Later</h4><ul>${d.saveLater.map(s => `<li>${escapeHTML(s)}</li>`).join('')}</ul>`; }
+      }
+      if (execSummary.questions?.length) {
+        body += `<h3>5. Customer Questions, Objections &amp; Responses</h3><table><tr><th>#</th><th>Question</th><th>Category</th><th>Quality</th><th>Response</th></tr>`;
+        execSummary.questions.forEach((q, i) => {
+          const col = qualColors[q.quality] || '#6b7280';
+          body += `<tr><td>${i + 1}</td><td>${escapeHTML(q.question)}</td><td>${escapeHTML(Q_CAT_LABEL_MD[q.category] || q.category || '')}</td><td style="color:${col};font-weight:bold">${escapeHTML(q.quality)}${q.urgency === 'now' ? ' — Address Now' : ''}</td><td>${escapeHTML(q.response || '')}</td></tr>`;
+        });
+        body += `</table>`;
+      }
+      if (execSummary.infosec)      body += `<h3>6. InfoSec / Deployment Deep Dive</h3>${execMdToHTML(execSummary.infosec)}`;
+      if (execSummary.gaps)         body += `<h3>7. Gaps &amp; Missed Opportunities</h3>${execMdToHTML(execSummary.gaps)}`;
+      if (execSummary.improvements) body += `<h3>8. Opportunities &amp; Improvements</h3>${execMdToHTML(execSummary.improvements)}`;
+      body += '<hr>';
+    }
+
+    // ── 8. Solution Framework ─────────────────────────────────────
+    const hasSFAnalyses = solutionFrameworkAnalyses && Object.values(solutionFrameworkAnalyses).some(v => v && v !== 'loading');
+    if ((solutionFramework && solutionFramework !== 'loading') || hasSFAnalyses) {
+      body += `<h2>Solution Framework Analysis</h2>`;
+      if (solutionFramework && solutionFramework !== 'loading') {
+        body += `<h3>Recommendation</h3>`;
+        body += `<p><strong>Framework:</strong> ${escapeHTML(FRAMEWORK_LABELS[solutionFramework.type] || solutionFramework.type)} (${escapeHTML(solutionFramework.type)})</p>`;
+        body += `<p><strong>Confidence:</strong> ${escapeHTML(solutionFramework.confidence)}</p>`;
+        body += `<p><strong>Reason:</strong> ${escapeHTML(solutionFramework.reason)}</p>`;
+        if (solutionFramework.alternativeType) {
+          body += `<p><strong>Also Consider:</strong> ${escapeHTML(solutionFramework.alternativeType)} — ${escapeHTML(solutionFramework.alternativeReason)}</p>`;
+        }
+      }
+      if (solutionFrameworkAnalyses) {
+        Object.entries(solutionFrameworkAnalyses).forEach(([type, analysis]) => {
+          if (!analysis || analysis === 'loading') return;
+          body += `<h3>${escapeHTML(FRAMEWORK_LABELS[type] || type)} (${type})</h3>`;
+          body += `<p><strong>Overall Fit:</strong> ${escapeHTML(FIT_LABELS_EXP[analysis.overallFit] || analysis.overallFit)}</p>`;
+          body += `<p><strong>Fit Reason:</strong> ${escapeHTML(analysis.fitReason)}</p>`;
+          if (analysis.competitiveContext && analysis.competitiveContext !== 'No competitors mentioned') {
+            body += `<p><strong>Competitor Context:</strong> ${escapeHTML(analysis.competitiveContext)}</p>`;
+          }
+          if (analysis.qualificationSignals?.length) {
+            body += `<h4>Qualification Signals</h4><table><tr><th>Signal</th><th>Found</th><th>Evidence</th></tr>`;
+            analysis.qualificationSignals.forEach(s => {
+              body += `<tr><td>${escapeHTML(s.signal)}</td><td>${s.found ? '✓ Yes' : 'No'}</td><td>${escapeHTML(s.evidence || '')}</td></tr>`;
+            });
+            body += `</table>`;
+          }
+          if (analysis.discoveryGaps?.length) {
+            body += `<h4>Discovery Gaps</h4><ul>${analysis.discoveryGaps.map(g => `<li>${escapeHTML(g)}</li>`).join('')}</ul>`;
+          }
+          if (analysis.requirementMapping?.length) {
+            body += `<h4>Requirement Mapping</h4><table><tr><th>Pain</th><th>Capability</th><th>Addressed</th></tr>`;
+            analysis.requirementMapping.forEach(r => {
+              body += `<tr><td>${escapeHTML(r.pain)}</td><td>${escapeHTML(r.capability)}</td><td>${r.addressed ? '✓' : '⚠'}</td></tr>`;
+            });
+            body += `</table>`;
+          }
+          if (analysis.objections?.length) {
+            body += `<h4>Objections</h4><table><tr><th>Objection</th><th>Suggested Response</th></tr>`;
+            analysis.objections.forEach(o => {
+              body += `<tr><td>${escapeHTML(o.objection)}</td><td>${escapeHTML(o.suggestedResponse)}</td></tr>`;
+            });
+            body += `</table>`;
+          }
+          if (analysis.roiAngles?.length) {
+            body += `<h4>ROI Angles</h4><ol>${analysis.roiAngles.map(r => `<li>${escapeHTML(r)}</li>`).join('')}</ol>`;
+          }
+          if (analysis.demoFocus) body += `<h4>Demo Focus</h4><p>${escapeHTML(analysis.demoFocus)}</p>`;
+        });
+      }
+      body += '<hr>';
+    }
+
+    // ── 9. Chat History ───────────────────────────────────────────
     if (messages?.length > 0) {
       const validMsgs = messages.filter(m => !m.error && !m.pending);
       if (validMsgs.length > 0) {
@@ -1132,6 +1241,11 @@ export function downloadFullReport(state, format) {
     }
     parts.push(lines.join('\n'));
   }
+  if (execSummary && execSummary !== 'loading') parts.push(execSummaryToMarkdown(execSummary, meetingId));
+  const hasSFMd = solutionFrameworkAnalyses && Object.values(solutionFrameworkAnalyses).some(v => v && v !== 'loading');
+  if ((solutionFramework && solutionFramework !== 'loading') || hasSFMd) {
+    parts.push(solutionFrameworkToMarkdown(solutionFramework, solutionFrameworkAnalyses || {}, meetingId));
+  }
   if (messages?.length > 0) parts.push(chatToMarkdown(messages, meetingId));
 
   if (parts.length === 0) return;
@@ -1142,5 +1256,200 @@ export function downloadFullReport(state, format) {
     triggerDownload(plain, `callscribe-report-${mid}.txt`, 'text/plain');
   } else {
     triggerDownload(content, `callscribe-report-${mid}.md`, 'text/markdown');
+  }
+}
+
+// ═════════════════════════════════════════════════════════════════
+// Solution Framework export formatters
+// ═════════════════════════════════════════════════════════════════
+
+const FRAMEWORK_LABELS = { MRP: 'Mirror Roleplay', DT: 'Digital Transformation', CD: 'Competitive Displacement' };
+const FIT_LABELS_EXP   = { strong: 'Strong Fit', moderate: 'Moderate Fit', weak: 'Weak Fit' };
+
+export function solutionFrameworkToMarkdown(recommendation, analyses, meetingId) {
+  const lines = [];
+  lines.push('# Solution Framework Analysis');
+  if (meetingId) lines.push(`*Meeting ID: ${meetingId}*`);
+  lines.push(`*Exported: ${new Date().toLocaleString()}*`);
+  lines.push('');
+
+  if (recommendation) {
+    lines.push('## Recommendation');
+    lines.push(`**Framework:** ${FRAMEWORK_LABELS[recommendation.type] || recommendation.type} (${recommendation.type})`);
+    lines.push(`**Confidence:** ${recommendation.confidence}`);
+    lines.push(`**Reason:** ${recommendation.reason}`);
+    if (recommendation.alternativeType) {
+      lines.push(`**Also Consider:** ${recommendation.alternativeType} — ${recommendation.alternativeReason}`);
+    }
+    lines.push('');
+  }
+
+  Object.entries(analyses).forEach(([type, analysis]) => {
+    if (!analysis || analysis === 'loading') return;
+    lines.push(`---`);
+    lines.push(`## ${FRAMEWORK_LABELS[type] || type} (${type})`);
+    lines.push(`**Overall Fit:** ${FIT_LABELS_EXP[analysis.overallFit] || analysis.overallFit}`);
+    lines.push(`**Fit Reason:** ${analysis.fitReason}`);
+    if (analysis.competitiveContext && analysis.competitiveContext !== 'No competitors mentioned') {
+      lines.push(`**Competitor Context:** ${analysis.competitiveContext}`);
+    }
+    lines.push('');
+
+    if (analysis.qualificationSignals?.length) {
+      lines.push('### Qualification Signals');
+      analysis.qualificationSignals.forEach(s => {
+        lines.push(`- [${s.found ? 'x' : ' '}] **${s.signal}**${s.evidence ? ` — "${s.evidence}"` : ''}`);
+      });
+      lines.push('');
+    }
+
+    if (analysis.discoveryGaps?.length) {
+      lines.push('### Discovery Gaps');
+      analysis.discoveryGaps.forEach(g => lines.push(`- ${g}`));
+      lines.push('');
+    }
+
+    if (analysis.requirementMapping?.length) {
+      lines.push('### Requirement Mapping');
+      analysis.requirementMapping.forEach(r => {
+        lines.push(`- **Pain:** ${r.pain}`);
+        lines.push(`  **Capability:** ${r.capability} ${r.addressed ? '✓' : '⚠'}`);
+      });
+      lines.push('');
+    }
+
+    if (analysis.objections?.length) {
+      lines.push('### Objections');
+      analysis.objections.forEach(o => {
+        lines.push(`- **${o.objection}**`);
+        lines.push(`  *Response:* ${o.suggestedResponse}`);
+      });
+      lines.push('');
+    }
+
+    if (analysis.roiAngles?.length) {
+      lines.push('### ROI Angles');
+      analysis.roiAngles.forEach((r, i) => lines.push(`${i + 1}. ${r}`));
+      lines.push('');
+    }
+
+    if (analysis.demoFocus) {
+      lines.push('### Demo Focus');
+      lines.push(analysis.demoFocus);
+      lines.push('');
+    }
+  });
+
+  return lines.join('\n');
+}
+
+function solutionFrameworkToJSON(recommendation, analyses, meetingId) {
+  return JSON.stringify({
+    exportedAt: new Date().toISOString(),
+    meetingId: meetingId || null,
+    recommendation: recommendation || null,
+    analyses: Object.fromEntries(
+      Object.entries(analyses).filter(([, v]) => v && v !== 'loading')
+    ),
+  }, null, 2);
+}
+
+const FIT_BADGE = { strong: 'badge-green', moderate: 'badge-amber', weak: 'badge' };
+
+function solutionFrameworkToWordDoc(recommendation, analyses, meetingId) {
+  let body = '';
+
+  if (recommendation) {
+    body += `<h2>Recommendation</h2>`;
+    body += `<table>
+  <tr><th>Framework</th><td>${escapeHTML(FRAMEWORK_LABELS[recommendation.type] || recommendation.type)} (${escapeHTML(recommendation.type)})</td></tr>
+  <tr><th>Confidence</th><td><span class="${recommendation.confidence === 'high' ? 'badge-green' : recommendation.confidence === 'medium' ? 'badge-amber' : 'badge-gray'}">${escapeHTML(recommendation.confidence)}</span></td></tr>
+  <tr><th>Reason</th><td>${escapeHTML(recommendation.reason)}</td></tr>
+  ${recommendation.alternativeType ? `<tr><th>Also Consider</th><td>${escapeHTML(recommendation.alternativeType)} — ${escapeHTML(recommendation.alternativeReason)}</td></tr>` : ''}
+</table>`;
+  }
+
+  Object.entries(analyses).forEach(([type, analysis]) => {
+    if (!analysis || analysis === 'loading') return;
+    const fit = analysis.overallFit || 'moderate';
+    body += `<hr><h2>${escapeHTML(FRAMEWORK_LABELS[type] || type)} (${escapeHTML(type)})</h2>`;
+    body += `<p><span class="${FIT_BADGE[fit] || 'badge-amber'}">${escapeHTML(FIT_LABELS_EXP[fit] || fit)}</span></p>`;
+    body += `<p><strong>Fit Reason:</strong> ${escapeHTML(analysis.fitReason)}</p>`;
+
+    if (analysis.competitiveContext && analysis.competitiveContext !== 'No competitors mentioned') {
+      body += `<h3>Competitor Context</h3><p>${escapeHTML(analysis.competitiveContext)}</p>`;
+    }
+
+    if (analysis.qualificationSignals?.length) {
+      const present = analysis.qualificationSignals.filter(s => s.found).length;
+      body += `<h3>Qualification Signals (${present} / ${analysis.qualificationSignals.length} present)</h3>`;
+      body += `<table><tr><th>Signal</th><th>Found</th><th>Evidence</th></tr>`;
+      analysis.qualificationSignals.forEach(s => {
+        body += `<tr><td>${escapeHTML(s.signal)}</td><td>${s.found ? '✓' : '✗'}</td><td><em>${escapeHTML(s.evidence || '')}</em></td></tr>`;
+      });
+      body += `</table>`;
+    }
+
+    if (analysis.discoveryGaps?.length) {
+      body += `<h3>Discovery Gaps</h3><ul>`;
+      analysis.discoveryGaps.forEach(g => { body += `<li>${escapeHTML(g)}</li>`; });
+      body += `</ul>`;
+    }
+
+    if (analysis.requirementMapping?.length) {
+      body += `<h3>Requirement Mapping</h3>`;
+      body += `<table><tr><th>Pain</th><th>Capability</th><th>Addressed</th></tr>`;
+      analysis.requirementMapping.forEach(r => {
+        body += `<tr><td>${escapeHTML(r.pain)}</td><td>${escapeHTML(r.capability)}</td><td>${r.addressed ? '✓' : '⚠'}</td></tr>`;
+      });
+      body += `</table>`;
+    }
+
+    if (analysis.objections?.length) {
+      body += `<h3>Objections</h3>`;
+      body += `<table><tr><th>Objection</th><th>Suggested Response</th></tr>`;
+      analysis.objections.forEach(o => {
+        body += `<tr><td>${escapeHTML(o.objection)}</td><td>${escapeHTML(o.suggestedResponse)}</td></tr>`;
+      });
+      body += `</table>`;
+    }
+
+    if (analysis.roiAngles?.length) {
+      body += `<h3>ROI Angles</h3><ol>`;
+      analysis.roiAngles.forEach(r => { body += `<li>${escapeHTML(r)}</li>`; });
+      body += `</ol>`;
+    }
+
+    if (analysis.demoFocus) {
+      body += `<h3>Demo Focus</h3><p>${escapeHTML(analysis.demoFocus)}</p>`;
+    }
+  });
+
+  return wrapWordHTML('Solution Framework Analysis', body, meetingId);
+}
+
+export function downloadSolutionFramework(recommendation, analyses, meetingId, format) {
+  const mid = (meetingId || 'callscribe').slice(-8);
+  if (format === 'doc') {
+    triggerDownload(solutionFrameworkToWordDoc(recommendation, analyses, meetingId), `solution-framework-${mid}.doc`, 'application/msword');
+    return;
+  }
+  if (format === 'json') {
+    triggerDownload(solutionFrameworkToJSON(recommendation, analyses, meetingId), `solution-framework-${mid}.json`, MIME.json);
+    return;
+  }
+  const md = solutionFrameworkToMarkdown(recommendation, analyses, meetingId);
+  if (format === 'txt') {
+    const plain = md
+      .replace(/^#{1,6}\s+/gm, '')
+      .replace(/\*\*(.*?)\*\*/g, '$1')
+      .replace(/\*(.*?)\*/g, '$1')
+      .replace(/`(.*?)`/g, '$1')
+      .replace(/^[-*]\s/gm, '  · ')
+      .replace(/^\d+\.\s/gm, m => `  ${m}`)
+      .replace(/^---$/gm, '─'.repeat(50));
+    triggerDownload(plain, `solution-framework-${mid}.txt`, MIME.txt);
+  } else {
+    triggerDownload(md, `solution-framework-${mid}.md`, MIME.md);
   }
 }

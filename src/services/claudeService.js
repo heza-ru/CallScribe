@@ -10,6 +10,7 @@ import {
 import { DEMO_ENVIRONMENTS } from '../data/demoEnvironments';
 import { compressTranscript } from '../utils/transcriptCompressor';
 import { recordTokens } from '../utils/tokenTracker';
+import { getSignal } from '../utils/abortManager';
 
 const CLAUDE_API_URL = 'https://api.anthropic.com/v1/messages';
 
@@ -34,30 +35,7 @@ export async function analyzeTranscript(transcript, meetingId, apiKey) {
   }
 
   const body = buildRequestBody(compressedTranscript, meetingId);
-
-  const response = await fetch(CLAUDE_API_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true',
-    },
-    body: JSON.stringify(body),
-  });
-
-  if (!response.ok) {
-    const errText = await response.text().catch(() => '');
-    let message = `Claude API error (${response.status})`;
-    try {
-      const errJson = JSON.parse(errText);
-      if (errJson?.error?.message) message = errJson.error.message;
-    } catch {
-      // ignore
-    }
-    throw new Error(message);
-  }
-
+  const response = await claudeFetch(body, apiKey, getSignal());
   const data = await response.json();
   const rawContent = data?.content?.[0]?.text;
   if (!rawContent) throw new Error('Empty response from Claude API');
@@ -75,28 +53,7 @@ export async function analyzeCallIntelligence(transcript, meetingId, apiKey) {
 
   const { text: compressed } = compressTranscript(transcript);
   const body = buildIntelligenceRequestBody(compressed, meetingId);
-
-  const response = await fetch(CLAUDE_API_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true',
-    },
-    body: JSON.stringify(body),
-  });
-
-  if (!response.ok) {
-    const errText = await response.text().catch(() => '');
-    let message = `Claude API error (${response.status})`;
-    try {
-      const errJson = JSON.parse(errText);
-      if (errJson?.error?.message) message = errJson.error.message;
-    } catch { /* ignore */ }
-    throw new Error(message);
-  }
-
+  const response = await claudeFetch(body, apiKey, getSignal());
   const data = await response.json();
   const rawContent = data?.content?.[0]?.text;
   if (!rawContent) throw new Error('Empty response from Claude API');
@@ -201,6 +158,7 @@ async function claudeFetch(body, apiKey, signal) {
       'Content-Type': 'application/json',
       'x-api-key': apiKey,
       'anthropic-version': '2023-06-01',
+      'anthropic-beta': 'prompt-caching-2024-07-31',
       'anthropic-dangerous-direct-browser-access': 'true',
     },
     body: JSON.stringify(body),
@@ -221,7 +179,7 @@ export async function detectCompetitors(transcript, apiKey) {
   if (!apiKey) throw new Error('Claude API key is not configured.');
   const { text: compressed } = compressTranscript(transcript);
   const body = buildCompetitorRequestBody(compressed);
-  const response = await claudeFetch(body, apiKey);
+  const response = await claudeFetch(body, apiKey, getSignal());
   const data = await response.json();
   const raw = data?.content?.[0]?.text;
   if (!raw) throw new Error('Empty response from Claude API');
@@ -243,7 +201,7 @@ export async function trackObjections(transcript, apiKey) {
   if (!apiKey) throw new Error('Claude API key is not configured.');
   const { text: compressed } = compressTranscript(transcript);
   const body = buildObjectionRequestBody(compressed);
-  const response = await claudeFetch(body, apiKey);
+  const response = await claudeFetch(body, apiKey, getSignal());
   const data = await response.json();
   const raw = data?.content?.[0]?.text;
   if (!raw) throw new Error('Empty response from Claude API');
@@ -267,7 +225,7 @@ export async function generateMOM(transcript, meetingId, apiKey) {
   if (!apiKey) throw new Error('Claude API key is not configured.');
   const { text: compressed } = compressTranscript(transcript);
   const body = buildMOMRequestBody(compressed, meetingId);
-  const response = await claudeFetch(body, apiKey);
+  const response = await claudeFetch(body, apiKey, getSignal());
   const data = await response.json();
   const raw = data?.content?.[0]?.text;
   if (!raw) throw new Error('Empty response from Claude API');
@@ -289,7 +247,7 @@ export async function analyzeDemoScope(transcript, apiKey) {
   if (!apiKey) throw new Error('Claude API key is not configured.');
   const { text: compressed } = compressTranscript(transcript);
   const body = buildDemoScopeRequestBody(compressed, DEMO_ENVIRONMENTS);
-  const response = await claudeFetch(body, apiKey);
+  const response = await claudeFetch(body, apiKey, getSignal());
   const data = await response.json();
   const raw = data?.content?.[0]?.text;
   if (!raw) throw new Error('Empty response from Claude API');
@@ -325,14 +283,9 @@ export async function generateExecSummary(transcript, meetingId, apiKey) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 7 * 60 * 1000); // 7 min hard timeout
 
-  // Stagger by 2s so two large requests don't hit the API simultaneously
-  const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
-
   try {
-    const [res1, res2] = await Promise.all([
-      claudeFetch(buildExecSummaryPart1Body(compressed), apiKey, controller.signal).then(r => r.json()),
-      delay(2000).then(() => claudeFetch(buildExecSummaryPart2Body(compressed), apiKey, controller.signal).then(r => r.json())),
-    ]);
+    const res1 = await claudeFetch(buildExecSummaryPart1Body(compressed), apiKey, controller.signal).then(r => r.json());
+    const res2 = await claudeFetch(buildExecSummaryPart2Body(compressed), apiKey, controller.signal).then(r => r.json());
 
     const raw1 = res1?.content?.[0]?.text;
     const raw2 = res2?.content?.[0]?.text;
@@ -377,7 +330,7 @@ export async function getSolutionFrameworkRecommendation(transcript, apiKey) {
   if (!apiKey) throw new Error('Claude API key is not configured.');
   const { text: compressed } = compressTranscript(transcript);
   const body = buildSolutionFrameworkRecommendationBody(compressed);
-  const response = await claudeFetch(body, apiKey);
+  const response = await claudeFetch(body, apiKey, getSignal());
   const data = await response.json();
   const raw = data?.content?.[0]?.text;
   if (!raw) throw new Error('Empty response from Claude API');
@@ -400,7 +353,7 @@ export async function analyzeSolutionFramework(transcript, frameworkType, apiKey
   if (!apiKey) throw new Error('Claude API key is not configured.');
   const { text: compressed } = compressTranscript(transcript);
   const body = buildSolutionFrameworkAnalysisBody(compressed, frameworkType);
-  const response = await claudeFetch(body, apiKey);
+  const response = await claudeFetch(body, apiKey, getSignal());
   const data = await response.json();
   const raw = data?.content?.[0]?.text;
   if (!raw) throw new Error('Empty response from Claude API');
@@ -428,7 +381,7 @@ export async function analyzeSolutionFramework(transcript, frameworkType, apiKey
 export async function* streamChatMessage(transcript, messages, apiKey) {
   if (!apiKey) throw new Error('Claude API key is not configured.');
   const body = buildChatRequestBody(transcript, messages);
-  const response = await claudeFetch(body, apiKey);
+  const response = await claudeFetch(body, apiKey, getSignal());
 
   const reader  = response.body.getReader();
   const decoder = new TextDecoder();

@@ -4,9 +4,11 @@ import remarkGfm from 'remark-gfm';
 import { MessageCircle, Send, Trash2, User, Sparkles, Download, ChevronDown, Check } from 'lucide-react';
 import { streamChatMessage } from '../services/claudeService';
 import { downloadChat } from '../utils/analysisFormatter';
-
-const ORANGE = '#E55014';
-const NAVY   = '#0D1726';
+import { ORANGE, NAVY } from '../constants';
+import { Spinner } from './ui/Spinner';
+import { useClickOutside } from '../hooks/useClickOutside';
+import { chatMdComponents as mdComponents } from '../utils/markdownComponents';
+import { useStore } from '../store';
 
 const SUGGESTIONS = [
   'What were the main pain points raised?',
@@ -15,18 +17,6 @@ const SUGGESTIONS = [
   'What objections came up and how were they handled?',
   'Summarise the key decisions made',
 ];
-
-const mdComponents = {
-  p:      ({ children }) => <p style={{ margin: '0 0 8px', fontSize: 12.5, lineHeight: 1.7, color: '#4B5A6D' }}>{children}</p>,
-  ul:     ({ children }) => <ul style={{ margin: '0 0 8px', paddingLeft: 16, display: 'flex', flexDirection: 'column', gap: 3 }}>{children}</ul>,
-  ol:     ({ children }) => <ol style={{ margin: '0 0 8px', paddingLeft: 16, display: 'flex', flexDirection: 'column', gap: 3 }}>{children}</ol>,
-  li:     ({ children }) => <li style={{ fontSize: 12.5, color: '#4B5A6D', lineHeight: 1.6 }}>{children}</li>,
-  strong: ({ children }) => <strong style={{ fontWeight: 700, color: NAVY }}>{children}</strong>,
-  code:   ({ children }) => <code style={{ background: 'rgba(13,23,38,0.07)', padding: '1px 5px', borderRadius: 3, fontSize: 11.5, fontFamily: 'monospace' }}>{children}</code>,
-  h1: ({ children }) => <p style={{ fontSize: 13, fontWeight: 800, color: NAVY, margin: '8px 0 4px' }}>{children}</p>,
-  h2: ({ children }) => <p style={{ fontSize: 12.5, fontWeight: 700, color: NAVY, margin: '8px 0 4px' }}>{children}</p>,
-  h3: ({ children }) => <p style={{ fontSize: 12, fontWeight: 700, color: NAVY, margin: '6px 0 3px' }}>{children}</p>,
-};
 
 function TypingIndicator() {
   return (
@@ -42,7 +32,15 @@ function TypingIndicator() {
   );
 }
 
-export function ChatScreen({ state, dispatch }) {
+export function ChatScreen() {
+  const transcript    = useStore(s => s.transcript);
+  const meetingId     = useStore(s => s.meetingId);
+  const settings      = useStore(s => s.settings);
+  const chatMessages  = useStore(s => s.chatMessages);
+  const chatAddMessage = useStore(s => s.chatAddMessage);
+  const chatUpdateLast = useStore(s => s.chatUpdateLast);
+  const chatClear     = useStore(s => s.chatClear);
+
   const [input,      setInput]      = useState('');
   const [sending,    setSending]    = useState(false);
   const [dlOpen,     setDlOpen]     = useState(false);
@@ -51,18 +49,13 @@ export function ChatScreen({ state, dispatch }) {
   const inputRef  = useRef(null);
   const dlRef     = useRef(null);
 
-  const messages = state.chatMessages || [];
-  const apiKey   = state.settings?.claudeApiKey;
+  const messages = chatMessages || [];
+  const apiKey   = settings?.claudeApiKey;
 
-  useEffect(() => {
-    if (!dlOpen) return;
-    function onDown(e) { if (dlRef.current && !dlRef.current.contains(e.target)) setDlOpen(false); }
-    document.addEventListener('mousedown', onDown);
-    return () => document.removeEventListener('mousedown', onDown);
-  }, [dlOpen]);
+  useClickOutside(dlRef, dlOpen ? () => setDlOpen(false) : null);
 
   function handleDownload(fmt) {
-    downloadChat(messages, state.meetingId, fmt);
+    downloadChat(messages, meetingId, fmt);
     setDlOpen(false);
     setDownloaded(true);
     setTimeout(() => setDownloaded(false), 2000);
@@ -74,13 +67,13 @@ export function ChatScreen({ state, dispatch }) {
 
   async function handleSend(text) {
     const content = (text || input).trim();
-    if (!content || sending || !state.transcript) return;
+    if (!content || sending || !transcript) return;
 
     const userMsg = { role: 'user', content };
     const pendingMsg = { role: 'assistant', content: '', pending: true };
 
-    dispatch({ type: 'CHAT_ADD_MESSAGE', message: userMsg });
-    dispatch({ type: 'CHAT_ADD_MESSAGE', message: pendingMsg });
+    chatAddMessage(userMsg);
+    chatAddMessage(pendingMsg);
     setInput('');
     setSending(true);
 
@@ -88,13 +81,13 @@ export function ChatScreen({ state, dispatch }) {
       let fullContent = '';
       const history = [...messages, userMsg];
 
-      for await (const chunk of streamChatMessage(state.transcript, history, apiKey)) {
+      for await (const chunk of streamChatMessage(transcript, history, apiKey)) {
         fullContent += chunk;
-        dispatch({ type: 'CHAT_UPDATE_LAST', message: { role: 'assistant', content: fullContent, pending: true } });
+        chatUpdateLast({ role: 'assistant', content: fullContent, pending: true });
       }
-      dispatch({ type: 'CHAT_UPDATE_LAST', message: { role: 'assistant', content: fullContent, pending: false } });
+      chatUpdateLast({ role: 'assistant', content: fullContent, pending: false });
     } catch (err) {
-      dispatch({ type: 'CHAT_UPDATE_LAST', message: { role: 'assistant', content: '', error: err.message } });
+      chatUpdateLast({ role: 'assistant', content: '', error: err.message });
     } finally {
       setSending(false);
       inputRef.current?.focus();
@@ -163,7 +156,7 @@ export function ChatScreen({ state, dispatch }) {
             </div>
 
             <button type="button"
-              onClick={() => dispatch({ type: 'CHAT_CLEAR' })}
+              onClick={() => chatClear()}
               style={{
                 display: 'flex', alignItems: 'center', gap: 5,
                 padding: '5px 10px', borderRadius: 7,
@@ -189,20 +182,20 @@ export function ChatScreen({ state, dispatch }) {
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 20, paddingTop: 32 }}>
             <div style={{ textAlign: 'center' }}>
               <div style={{ width: 52, height: 52, borderRadius: 14, background: '#fff', border: '1px solid #E4E9F0', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px' }}>
-                <MessageCircle size={24} style={{ color: state.transcript ? ORANGE : '#C8D2DE' }} />
+                <MessageCircle size={24} style={{ color: transcript ? ORANGE : '#C8D2DE' }} />
               </div>
               <div style={{ fontSize: 13, fontWeight: 800, color: NAVY, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 5 }}>
-                {state.transcript ? 'Ask Anything' : 'No Transcript'}
+                {transcript ? 'Ask Anything' : 'No Transcript'}
               </div>
               <div style={{ fontSize: 12, color: '#8A97A8', lineHeight: 1.65, maxWidth: 240 }}>
-                {state.transcript
+                {transcript
                   ? 'Ask questions about this call — Claude will answer based only on the transcript.'
                   : 'Sync a Mindtickle call first to start chatting.'}
               </div>
             </div>
 
             {/* Suggestion chips */}
-            {state.transcript && (
+            {transcript && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6, width: '100%' }}>
                 <div style={{ fontSize: 9.5, fontWeight: 700, color: '#A8B4C0', textTransform: 'uppercase', letterSpacing: '0.08em', textAlign: 'center', marginBottom: 2 }}>
                   Try asking
@@ -294,8 +287,8 @@ export function ChatScreen({ state, dispatch }) {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            disabled={!state.transcript || sending}
-            placeholder={state.transcript ? 'Ask something about this call...' : 'Sync a call first...'}
+            disabled={!transcript || sending}
+            placeholder={transcript ? 'Ask something about this call...' : 'Sync a call first...'}
             rows={1}
             style={{
               flex: 1, resize: 'none', minHeight: 40, maxHeight: 120,
@@ -315,20 +308,20 @@ export function ChatScreen({ state, dispatch }) {
           />
           <button type="button"
             onClick={() => handleSend()}
-            disabled={!input.trim() || sending || !state.transcript}
+            disabled={!input.trim() || sending || !transcript}
             style={{
               width: 40, height: 40, borderRadius: 8, border: 'none', flexShrink: 0,
-              background: input.trim() && !sending && state.transcript ? ORANGE : '#E4E9F0',
+              background: input.trim() && !sending && transcript ? ORANGE : '#E4E9F0',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              cursor: input.trim() && !sending && state.transcript ? 'pointer' : 'default',
+              cursor: input.trim() && !sending && transcript ? 'pointer' : 'default',
               transition: 'background 150ms',
             }}
-            onMouseEnter={(e) => { if (input.trim() && !sending && state.transcript) e.currentTarget.style.background = '#CC4712'; }}
-            onMouseLeave={(e) => { if (input.trim() && !sending && state.transcript) e.currentTarget.style.background = ORANGE; }}
+            onMouseEnter={(e) => { if (input.trim() && !sending && transcript) e.currentTarget.style.background = '#CC4712'; }}
+            onMouseLeave={(e) => { if (input.trim() && !sending && transcript) e.currentTarget.style.background = ORANGE; }}
           >
             {sending
-              ? <span style={{ width: 14, height: 14, border: '2px solid rgba(255,255,255,0.3)', borderTopColor: '#fff', borderRadius: '50%', animation: 'spin 0.7s linear infinite', display: 'inline-block' }} />
-              : <Send size={14} color={input.trim() && state.transcript ? '#fff' : '#A8B4C0'} strokeWidth={2.5} />
+              ? <Spinner size={14} color="#fff" trackColor="rgba(255,255,255,0.3)" />
+              : <Send size={14} color={input.trim() && transcript ? '#fff' : '#A8B4C0'} strokeWidth={2.5} />
             }
           </button>
         </div>

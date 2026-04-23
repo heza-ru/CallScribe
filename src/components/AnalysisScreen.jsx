@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef } from 'react';
 import {
   Bug, Zap, MessageSquare, Lightbulb, ListTodo,
   ExternalLink, Pencil, X, RefreshCw, LayoutList,
@@ -8,10 +8,11 @@ import { analyzeTranscript, analyzeCallIntelligence } from '../services/claudeSe
 import { createJiraTicket } from '../services/jiraService';
 import { createProductboardInsight } from '../services/productboardService';
 import { downloadAllInsights, downloadSingleInsight, downloadFullReport } from '../utils/analysisFormatter';
-import { SCREENS } from '../constants';
-
-const ORANGE = '#E55014';
-const NAVY   = '#0D1726';
+import { SCREENS, ORANGE, NAVY } from '../constants';
+import { Spinner } from './ui/Spinner';
+import { TabBar } from './ui/TabBar';
+import { useClickOutside } from '../hooks/useClickOutside';
+import { useStore } from '../store';
 
 const TYPE_META = {
   bug:         { icon: Bug,           color: '#dc2626', bg: '#fef2f2', label: 'Bug' },
@@ -51,14 +52,7 @@ function InsightCard({ insight, meetingId, settings, onEdit, onDismiss, delay = 
   const [dlOpen,       setDlOpen]       = useState(false);
   const dlRef = useRef(null);
 
-  useEffect(() => {
-    if (!dlOpen) return;
-    function onDown(e) {
-      if (dlRef.current && !dlRef.current.contains(e.target)) setDlOpen(false);
-    }
-    document.addEventListener('mousedown', onDown);
-    return () => document.removeEventListener('mousedown', onDown);
-  }, [dlOpen]);
+  useClickOutside(dlRef, dlOpen ? () => setDlOpen(false) : null);
 
   const meta   = TYPE_META[insight.type] || TYPE_META.improvement;
   const TypeIcon = meta.icon;
@@ -237,7 +231,7 @@ function InsightCard({ insight, meetingId, settings, onEdit, onDismiss, delay = 
                     cursor: isBusy ? 'not-allowed' : 'pointer', opacity: isBusy ? 0.6 : 1,
                     whiteSpace: 'nowrap',
                   }}>
-                  {jira.loading && <span style={{ width: 9, height: 9, border: '1.5px solid rgba(255,255,255,0.3)', borderTopColor: '#fff', borderRadius: '50%', animation: 'spin 0.7s linear infinite', display: 'inline-block', flexShrink: 0 }} />}
+                  {jira.loading && <Spinner size={9} color="#fff" trackColor="rgba(255,255,255,0.3)" />}
                   {jira.loading ? 'Creating…' : 'JIRA'}
                 </button>
           )}
@@ -260,7 +254,7 @@ function InsightCard({ insight, meetingId, settings, onEdit, onDismiss, delay = 
                     cursor: isBusy ? 'not-allowed' : 'pointer', opacity: isBusy ? 0.6 : 1,
                     whiteSpace: 'nowrap',
                   }}>
-                  {pb.loading && <span style={{ width: 9, height: 9, border: '1.5px solid #C8D2DE', borderTopColor: NAVY, borderRadius: '50%', animation: 'spin 0.7s linear infinite', display: 'inline-block', flexShrink: 0 }} />}
+                  {pb.loading && <Spinner size={9} color={NAVY} trackColor="#C8D2DE" />}
                   {pb.loading ? 'Creating…' : 'Productboard'}
                 </button>
           )}
@@ -308,7 +302,18 @@ const EXPORT_FORMATS = [
   { fmt: 'txt',  label: 'Plain Text',            ext: '.txt'   },
 ];
 
-export function AnalysisScreen({ state, dispatch }) {
+export function AnalysisScreen() {
+  const stateInsights    = useStore(s => s.insights);
+  const _insightsRan     = useStore(s => s._insightsRan);
+  const meetingId        = useStore(s => s.meetingId);
+  const transcript       = useStore(s => s.transcript);
+  const settings         = useStore(s => s.settings);
+  const callIntelligence = useStore(s => s.callIntelligence);
+  const setScreen        = useStore(s => s.setScreen);
+  const setCallIntelligence = useStore(s => s.setCallIntelligence);
+  const insightsLoaded   = useStore(s => s.insightsLoaded);
+  const editTicket       = useStore(s => s.editTicket);
+
   const [activeTab,   setTab]        = useState('all');
   const [reanalyzing, setReanalyzing] = useState(false);
   const [error,       setError]       = useState(null);
@@ -317,23 +322,16 @@ export function AnalysisScreen({ state, dispatch }) {
   const [downloaded,  setDownloaded]  = useState(false);
   const exportRef = useRef(null);
 
-  useEffect(() => {
-    if (!exportOpen) return;
-    function onDown(e) {
-      if (exportRef.current && !exportRef.current.contains(e.target)) setExportOpen(false);
-    }
-    document.addEventListener('mousedown', onDown);
-    return () => document.removeEventListener('mousedown', onDown);
-  }, [exportOpen]);
+  useClickOutside(exportRef, exportOpen ? () => setExportOpen(false) : null);
 
   function handleExport(fmt) {
-    downloadAllInsights(insights, state.meetingId, fmt);
+    downloadAllInsights(insights, meetingId, fmt);
     setExportOpen(false);
     setDownloaded(true);
     setTimeout(() => setDownloaded(false), 2000);
   }
 
-  const insights = (state.insights || []).filter(i => !dismissed.has(i.id));
+  const insights = (stateInsights || []).filter(i => !dismissed.has(i.id));
 
   // Build display list based on active tab
   function buildDisplayList() {
@@ -392,20 +390,19 @@ export function AnalysisScreen({ state, dispatch }) {
   async function handleReanalyze() {
     setError(null);
     setReanalyzing(true);
-    const { transcript, meetingId, settings, callIntelligence } = state;
     const apiKey = settings?.claudeApiKey;
 
     // Only trigger call intelligence if not already loaded
     if (!callIntelligence || callIntelligence === null) {
-      dispatch({ type: 'CALL_INTELLIGENCE_LOADING' });
+      setCallIntelligence('loading');
       analyzeCallIntelligence(transcript, meetingId, apiKey)
-        .then(ci => dispatch({ type: 'CALL_INTELLIGENCE_LOADED', callIntelligence: ci }))
-        .catch(() => dispatch({ type: 'CALL_INTELLIGENCE_FAILED' }));
+        .then(ci => setCallIntelligence(ci))
+        .catch(() => setCallIntelligence(null));
     }
 
     try {
       const newInsights = await analyzeTranscript(transcript, meetingId, apiKey);
-      dispatch({ type: 'INSIGHTS_LOADED', insights: newInsights });
+      insightsLoaded(newInsights);
       setDismissed(new Set());
     } catch (err) {
       setError(err.message);
@@ -432,9 +429,9 @@ export function AnalysisScreen({ state, dispatch }) {
           Product Gaps
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-          {state.callIntelligence && (
+          {callIntelligence && (
             <button type="button"
-              onClick={() => dispatch({ type: 'SET_SCREEN', screen: SCREENS.INTELLIGENCE })}
+              onClick={() => setScreen(SCREENS.INTELLIGENCE)}
               style={{
                 display: 'flex', alignItems: 'center', gap: 5,
                 padding: '5px 10px', borderRadius: 7,
@@ -518,31 +515,7 @@ export function AnalysisScreen({ state, dispatch }) {
       </div>
 
       {/* Tab bar */}
-      <div style={{
-        display: 'flex', flexShrink: 0,
-        background: '#fff', borderBottom: '1px solid #E4E9F0',
-        padding: '0 16px',
-      }}>
-        {TABS.map(({ key, label }) => {
-          const active = activeTab === key;
-          return (
-            <button key={key} type="button" onClick={() => setTab(key)}
-              style={{
-                padding: '10px 14px 9px', background: 'none', border: 'none',
-                cursor: 'pointer', fontSize: 11, fontWeight: active ? 800 : 600,
-                color: active ? NAVY : '#8A97A8',
-                textTransform: 'uppercase', letterSpacing: '0.08em',
-                borderBottom: active ? `2px solid ${ORANGE}` : '2px solid transparent',
-                transition: 'color 120ms, border-color 120ms',
-                marginBottom: -1,
-              }}
-              onMouseEnter={(e) => { if (!active) e.currentTarget.style.color = NAVY; }}
-              onMouseLeave={(e) => { if (!active) e.currentTarget.style.color = '#8A97A8'; }}
-            >
-              {label}
-            </button>
-          );
-        })}
+      <TabBar tabs={TABS} active={activeTab} onSelect={setTab}>
         {insights.length > 0 && (
           <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', paddingBottom: 1 }}>
             <span style={{ fontSize: 10, fontWeight: 600, color: '#A8B4C0' }}>
@@ -550,7 +523,7 @@ export function AnalysisScreen({ state, dispatch }) {
             </span>
           </div>
         )}
-      </div>
+      </TabBar>
 
       {error && (
         <div className="banner error" style={{ margin: '6px 14px 0', flexShrink: 0 }}>
@@ -577,7 +550,7 @@ export function AnalysisScreen({ state, dispatch }) {
             </div>
             <div>
               <div style={{ fontSize: 13, fontWeight: 800, color: NAVY, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                {state.insights?.length === 0 && !state._insightsRan ? 'Ready to Analyze' : 'No Gaps Found'}
+                {stateInsights?.length === 0 && !_insightsRan ? 'Ready to Analyze' : 'No Gaps Found'}
               </div>
               <div style={{ fontSize: 12, color: '#8A97A8', lineHeight: 1.65, maxWidth: 230, margin: '0 auto 18px' }}>
                 Extract product gaps, bugs, feature requests, and pain points from this call using Claude.
@@ -596,7 +569,7 @@ export function AnalysisScreen({ state, dispatch }) {
           </div>
         ) : reanalyzing ? (
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '12px 0', color: '#8A97A8', fontSize: 12, fontWeight: 600 }}>
-            <span style={{ width: 14, height: 14, border: '2px solid #E4E9F0', borderTopColor: ORANGE, borderRadius: '50%', animation: 'spin 0.7s linear infinite', display: 'inline-block', flexShrink: 0 }} />
+            <Spinner size={14} color={ORANGE} trackColor="#E4E9F0" />
             Re-analyzing with Claude...
           </div>
         ) : display.type === 'flat' ? (
@@ -605,9 +578,9 @@ export function AnalysisScreen({ state, dispatch }) {
               key={insight.id}
               insight={insight}
               delay={Math.min(idx * 40, 320)}
-              meetingId={state.meetingId}
-              settings={state.settings}
-              onEdit={(ticket) => dispatch({ type: 'EDIT_TICKET', ticket })}
+              meetingId={meetingId}
+              settings={settings}
+              onEdit={(ticket) => editTicket(ticket)}
               onDismiss={(id) => setDismissed(prev => new Set([...prev, id]))}
             />
           ))
@@ -620,9 +593,9 @@ export function AnalysisScreen({ state, dispatch }) {
                   key={insight.id}
                   insight={insight}
                   delay={Math.min(idx * 40, 240)}
-                  meetingId={state.meetingId}
-                  settings={state.settings}
-                  onEdit={(ticket) => dispatch({ type: 'EDIT_TICKET', ticket })}
+                  meetingId={meetingId}
+                  settings={settings}
+                  onEdit={(ticket) => editTicket(ticket)}
                   onDismiss={(id) => setDismissed(prev => new Set([...prev, id]))}
                 />
               ))}

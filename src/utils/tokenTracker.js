@@ -5,13 +5,15 @@ const INPUT_PRICE_PER_M  = 0.80;
 const OUTPUT_PRICE_PER_M = 4.00;
 
 const OP_LABELS = {
-  insights:      'Product Gaps',
-  intelligence:  'Call Intelligence',
-  competitors:   'Competitor Analysis',
-  objections:    'Objection Tracker',
-  mom:           'Meeting Minutes',
-  chat:          'Transcript Chat',
-  demo_scope:    'Demo Scope Advisor',
+  insights:           'Product Gaps',
+  intelligence:       'Call Intelligence',
+  competitors:        'Competitor Analysis',
+  objections:         'Objection Tracker',
+  mom:                'Meeting Minutes',
+  chat:               'Transcript Chat',
+  demo_scope:         'Demo Scope Advisor',
+  exec_summary:       'Exec Summary',
+  solution_framework: 'Solution Framework',
 };
 
 export async function recordTokens(op, inputTokens, outputTokens) {
@@ -44,6 +46,8 @@ export async function clearTokenUsage() {
     chrome.storage.local.set({ [KEY]: { sessions: [] } }, resolve);
   });
 }
+
+export const SESSION_CAP = 200;
 
 export function computeStats(sessions) {
   const byOp = {};

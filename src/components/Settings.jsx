@@ -1,10 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Eye, EyeOff, CheckCircle2, Lock, ExternalLink, Check, X, BarChart2, Trash2 } from 'lucide-react';
-import { SCREENS } from '../constants';
-import { getTokenUsage, clearTokenUsage, computeStats } from '../utils/tokenTracker';
-
-const ORANGE = '#E55014';
-const NAVY   = '#0D1726';
+import { SCREENS, ORANGE, NAVY } from '../constants';
+import { getTokenUsage, clearTokenUsage, computeStats, SESSION_CAP } from '../utils/tokenTracker';
+import { useStore } from '../store';
 
 function SectionHeader({ label, sub, href, linkLabel }) {
   return (
@@ -121,7 +119,9 @@ function IntegrationRow({ icon: Icon, label, sub, enabled, onToggle }) {
   );
 }
 
-export function Settings({ state, dispatch }) {
+export function Settings() {
+  const settingsSaved = useStore(s => s.settingsSaved);
+  const setScreen     = useStore(s => s.setScreen);
   const [claudeApiKey,       setClaudeApiKey]       = useState('');
   const [jiraBaseUrl,        setJiraBaseUrl]        = useState('');
   const [jiraEmail,          setJiraEmail]          = useState('');
@@ -165,14 +165,14 @@ export function Settings({ state, dispatch }) {
   function handleSave() {
     const settings = { claudeApiKey, jiraBaseUrl, jiraEmail, jiraApiToken, jiraProjectKey, productboardApiKey };
     chrome.storage.sync.set(settings, () => {
-      dispatch({ type: 'SETTINGS_SAVED', settings });
+      settingsSaved(settings);
       setSaved(true);
       setTimeout(() => setSaved(false), 2500);
     });
   }
 
   function handleDiscard() {
-    dispatch({ type: 'SET_SCREEN', screen: SCREENS.DETECTION });
+    setScreen(SCREENS.DETECTION);
   }
 
   return (
@@ -344,6 +344,20 @@ export function Settings({ state, dispatch }) {
               <Trash2 size={9} strokeWidth={2} /> Clear
             </button>
           </div>
+          {/* Cap warning */}
+          {tokenStats && tokenStats.totalCalls >= SESSION_CAP * 0.9 && (
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 8,
+              padding: '8px 14px', background: '#fffbeb',
+              borderBottom: '1px solid #fde68a',
+              fontSize: 10.5, color: '#92400e', fontWeight: 600,
+            }}>
+              <span style={{ fontSize: 12 }}>⚠</span>
+              {tokenStats.totalCalls >= SESSION_CAP
+                ? `History full (${SESSION_CAP} calls). Oldest records are being dropped.`
+                : `Approaching history limit — ${SESSION_CAP - tokenStats.totalCalls} slots remaining.`}
+            </div>
+          )}
           {/* Per-operation breakdown */}
           {tokenStats && Object.keys(tokenStats.byOp).length > 0 ? (
             Object.entries(tokenStats.byOp).map(([op, s], i, arr) => (

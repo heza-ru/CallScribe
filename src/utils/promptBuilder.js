@@ -1,3 +1,5 @@
+const MODEL = 'claude-haiku-4-5-20251001';
+
 // ─────────────────────────────────────────────────────────────────
 // Whatfix product knowledge: helps Claude produce tightly relevant,
 // correctly labelled tickets instead of generic SaaS observations.
@@ -148,10 +150,10 @@ Extract Whatfix product insights from this transcript and return the JSON array.
 
 export function buildRequestBody(transcript, meetingId) {
   return {
-    model: 'claude-haiku-4-5-20251001',
+    model: MODEL,
     max_tokens: 4096,
     temperature: 0,
-    system: SYSTEM_PROMPT,
+    system: [{ type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }],
     messages: [
       {
         role: 'user',
@@ -254,10 +256,10 @@ Analyze this call and return the JSON intelligence report.`;
 
 export function buildIntelligenceRequestBody(transcript, meetingId) {
   return {
-    model: 'claude-haiku-4-5-20251001',
+    model: MODEL,
     max_tokens: 2048,
     temperature: 0,
-    system: INTELLIGENCE_SYSTEM_PROMPT,
+    system: [{ type: 'text', text: INTELLIGENCE_SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }],
     messages: [
       {
         role: 'user',
@@ -314,10 +316,10 @@ Rules:
 
 export function buildCompetitorRequestBody(transcript) {
   return {
-    model: 'claude-haiku-4-5-20251001',
+    model: MODEL,
     max_tokens: 1024,
     temperature: 0,
-    system: COMPETITOR_SYSTEM_PROMPT,
+    system: [{ type: 'text', text: COMPETITOR_SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }],
     messages: [{ role: 'user', content: `Transcript:\n${transcript}\n\nExtract competitor mentions and return JSON.` }],
   };
 }
@@ -353,10 +355,10 @@ Rules:
 
 export function buildObjectionRequestBody(transcript) {
   return {
-    model: 'claude-haiku-4-5-20251001',
+    model: MODEL,
     max_tokens: 1024,
     temperature: 0,
-    system: OBJECTION_SYSTEM_PROMPT,
+    system: [{ type: 'text', text: OBJECTION_SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }],
     messages: [{ role: 'user', content: `Transcript:\n${transcript}\n\nExtract all objections and return JSON.` }],
   };
 }
@@ -399,10 +401,10 @@ Format each version as clean markdown that reads professionally when rendered.`;
 
 export function buildMOMRequestBody(transcript, meetingId) {
   return {
-    model: 'claude-haiku-4-5-20251001',
+    model: MODEL,
     max_tokens: 3000,
     temperature: 0,
-    system: MOM_SYSTEM_PROMPT,
+    system: [{ type: 'text', text: MOM_SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }],
     messages: [{
       role: 'user',
       content: `Meeting ID: ${meetingId || 'Unknown'}\n\nTranscript:\n${transcript}\n\nGenerate internal and external meeting minutes. Return JSON with "internal" and "external" keys.`,
@@ -494,10 +496,10 @@ export function buildDemoScopeRequestBody(transcript, envList) {
   ).join('\n');
 
   return {
-    model: 'claude-haiku-4-5-20251001',
+    model: MODEL,
     max_tokens: 1500,
     temperature: 0,
-    system: DEMO_SCOPE_SYSTEM_PROMPT,
+    system: [{ type: 'text', text: DEMO_SCOPE_SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }],
     messages: [{
       role: 'user',
       content: `## Available Demo Environments\n${envListText}\n\n## Call Transcript\n${transcript}\n\nAnalyze the transcript and return the demo scope recommendation JSON.`,
@@ -664,10 +666,10 @@ Rules:
 
 export function buildExecSummaryPart1Body(transcript) {
   return {
-    model: 'claude-haiku-4-5-20251001',
+    model: MODEL,
     max_tokens: 6000,
     temperature: 0,
-    system: EXEC_SUMMARY_PART1_PROMPT,
+    system: [{ type: 'text', text: EXEC_SUMMARY_PART1_PROMPT, cache_control: { type: 'ephemeral' } }],
     messages: [{
       role: 'user',
       content: `Transcript:\n${transcript}\n\nAnalyse sections 1-4 only. Return JSON only.`,
@@ -677,10 +679,10 @@ export function buildExecSummaryPart1Body(transcript) {
 
 export function buildExecSummaryPart2Body(transcript) {
   return {
-    model: 'claude-haiku-4-5-20251001',
+    model: MODEL,
     max_tokens: 6000,
     temperature: 0,
-    system: EXEC_SUMMARY_PART2_PROMPT,
+    system: [{ type: 'text', text: EXEC_SUMMARY_PART2_PROMPT, cache_control: { type: 'ephemeral' } }],
     messages: [{
       role: 'user',
       content: `Transcript:\n${transcript}\n\nAnalyse sections 5-8, produce scores, executive summary, and follow-up actions. Return JSON only.`,
@@ -715,10 +717,10 @@ Rules:
 
 export function buildSolutionFrameworkRecommendationBody(transcript) {
   return {
-    model: 'claude-haiku-4-5-20251001',
+    model: MODEL,
     max_tokens: 512,
     temperature: 0,
-    system: SOLUTION_FRAMEWORK_RECOMMENDATION_PROMPT,
+    system: [{ type: 'text', text: SOLUTION_FRAMEWORK_RECOMMENDATION_PROMPT, cache_control: { type: 'ephemeral' } }],
     messages: [{
       role: 'user',
       content: `Transcript:\n${transcript}\n\nIdentify the best-fit Whatfix solution framework and return JSON.`,
@@ -898,10 +900,10 @@ Rules:
 
 export function buildSolutionFrameworkAnalysisBody(transcript, frameworkType) {
   return {
-    model: 'claude-haiku-4-5-20251001',
+    model: MODEL,
     max_tokens: 3000,
     temperature: 0,
-    system: SOLUTION_FRAMEWORK_ANALYSIS_SYSTEM(frameworkType),
+    system: [{ type: 'text', text: SOLUTION_FRAMEWORK_ANALYSIS_SYSTEM(frameworkType), cache_control: { type: 'ephemeral' } }],
     messages: [{
       role: 'user',
       content: `Transcript:\n${transcript}\n\nAnalyze this call against the ${frameworkType} framework and return JSON.`,
@@ -911,10 +913,10 @@ export function buildSolutionFrameworkAnalysisBody(transcript, frameworkType) {
 
 export function buildChatRequestBody(transcript, messages) {
   return {
-    model: 'claude-haiku-4-5-20251001',
+    model: MODEL,
     max_tokens: 1024,
     stream: true,
-    system: buildChatSystemPrompt(transcript),
+    system: [{ type: 'text', text: buildChatSystemPrompt(transcript), cache_control: { type: 'ephemeral' } }],
     messages: messages.map(m => ({ role: m.role, content: m.content })),
   };
 }

@@ -11,3 +11,6 @@ export const SCREENS = {
   SOLUTION_FRAMEWORK: 'solution_framework',
   SETTINGS:           'settings',
 };
+
+export const ORANGE = '#E55014';
+export const NAVY   = '#0D1726';

@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { Target, RefreshCw, ExternalLink, Copy, Check, AlertTriangle, CheckCircle2, Copy as CopyIcon, GitBranch, Building2, Layers, Zap, Monitor, Smartphone, AppWindow } from 'lucide-react';
 import { analyzeDemoScope } from '../services/claudeService';
-
-const ORANGE = '#E55014';
-const NAVY   = '#0D1726';
+import { ORANGE, NAVY } from '../constants';
+import { Spinner } from './ui/Spinner';
+import { useStore } from '../store';
 
 const STAGE_LABELS = {
   discovery:  { label: 'Discovery',  color: '#8A97A8', bg: '#F5F7FA' },
@@ -120,26 +120,31 @@ function EnvCard({ rec, primary }) {
   );
 }
 
-export function DemoScopeScreen({ state, dispatch }) {
+export function DemoScopeScreen() {
+  const transcript = useStore(s => s.transcript);
+  const settings   = useStore(s => s.settings);
+  const demoScope  = useStore(s => s.demoScope);
+  const setDemoScope = useStore(s => s.setDemoScope);
+
   const [loading, setLoading] = useState(false);
   const [error,   setError]   = useState(null);
   const [copied,  setCopied]  = useState(false);
 
-  const scope = state.demoScope;
+  const scope = demoScope;
   const hasContent = scope && scope !== 'loading';
   const isLoading  = loading || scope === 'loading';
 
   async function handleAnalyze() {
-    if (!state.transcript) return;
+    if (!transcript) return;
     setLoading(true);
     setError(null);
-    dispatch({ type: 'DEMO_SCOPE_LOADING' });
+    setDemoScope('loading');
     try {
-      const result = await analyzeDemoScope(state.transcript, state.settings?.claudeApiKey);
-      dispatch({ type: 'DEMO_SCOPE_LOADED', demoScope: result });
+      const result = await analyzeDemoScope(transcript, settings?.claudeApiKey);
+      setDemoScope(result);
     } catch (err) {
       setError(err.message);
-      dispatch({ type: 'DEMO_SCOPE_FAILED' });
+      setDemoScope(null);
     } finally {
       setLoading(false);
     }
@@ -213,21 +218,21 @@ export function DemoScopeScreen({ state, dispatch }) {
               {copied ? 'Copied' : 'Copy'}
             </button>
           )}
-          <button type="button" onClick={handleAnalyze} disabled={!state.transcript || isLoading}
+          <button type="button" onClick={handleAnalyze} disabled={!transcript || isLoading}
             style={{
               display: 'flex', alignItems: 'center', gap: 5,
               padding: '5px 10px', height: 30, borderRadius: 7,
-              background: !state.transcript || isLoading ? '#C8D2DE' : ORANGE,
-              border: 'none', cursor: !state.transcript || isLoading ? 'not-allowed' : 'pointer',
+              background: !transcript || isLoading ? '#C8D2DE' : ORANGE,
+              border: 'none', cursor: !transcript || isLoading ? 'not-allowed' : 'pointer',
               fontSize: 11, fontWeight: 800, color: '#fff',
               textTransform: 'uppercase', letterSpacing: '0.06em',
               transition: 'background 130ms', whiteSpace: 'nowrap',
             }}
-            onMouseEnter={e => { if (state.transcript && !isLoading) e.currentTarget.style.background = '#CC4712'; }}
-            onMouseLeave={e => { if (state.transcript && !isLoading) e.currentTarget.style.background = ORANGE; }}
+            onMouseEnter={e => { if (transcript && !isLoading) e.currentTarget.style.background = '#CC4712'; }}
+            onMouseLeave={e => { if (transcript && !isLoading) e.currentTarget.style.background = ORANGE; }}
           >
             {isLoading
-              ? <span style={{ width: 11, height: 11, border: '1.5px solid rgba(255,255,255,0.3)', borderTopColor: '#fff', borderRadius: '50%', animation: 'spin 0.7s linear infinite', display: 'inline-block' }} />
+              ? <Spinner size={11} color="#fff" trackColor="rgba(255,255,255,0.3)" />
               : <RefreshCw size={11} strokeWidth={2.5} />
             }
             {isLoading ? 'Analyzing...' : hasContent ? 'Re-analyze' : 'Analyze'}
@@ -274,11 +279,11 @@ export function DemoScopeScreen({ state, dispatch }) {
                 No Scope Yet
               </div>
               <div style={{ fontSize: 12, color: '#8A97A8', lineHeight: 1.65, maxWidth: 240, margin: '0 auto 18px' }}>
-                {state.transcript
+                {transcript
                   ? 'Analyze the call to get demo environment recommendations and POC scope guidance.'
                   : 'Sync a Mindtickle call first to scope the demo.'}
               </div>
-              {state.transcript && (
+              {transcript && (
                 <button type="button" onClick={handleAnalyze}
                   style={{
                     display: 'flex', alignItems: 'center', gap: 6, margin: '0 auto',

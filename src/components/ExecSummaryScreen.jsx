@@ -1,14 +1,17 @@
 import { useState, useRef, useLayoutEffect, useEffect } from 'react';
 import gsap from 'gsap';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import {
   ArrowLeft, RefreshCw, Download, BookOpen,
 } from 'lucide-react';
 import { generateExecSummary } from '../services/claudeService';
 import { downloadExecSummary } from '../utils/analysisFormatter';
-import { SCREENS } from '../constants';
-
-const ORANGE = '#E55014';
-const NAVY   = '#0D1726';
+import { SCREENS, ORANGE, NAVY } from '../constants';
+import { useClickOutside } from '../hooks/useClickOutside';
+import { mdComponents } from '../utils/markdownComponents';
+import { TabBar } from './ui/TabBar';
+import { useStore } from '../store';
 
 const SCORE_LABELS = { 1: 'Poor', 2: 'Weak', 3: 'Moderate', 4: 'Good', 5: 'Excellent' };
 const SCORE_COLORS = { 1: '#dc2626', 2: '#f97316', 3: '#d97706', 4: '#16a34a', 5: '#15803d' };
@@ -77,7 +80,7 @@ const ANALYSIS_STEPS = [
   'Compiling Executive Summary',
 ];
 
-// ── Inline markdown renderer ──────────────────────────────────────
+// ── Inline bold helper (used in bullet arrays, not markdown blocks) ──
 
 function parseInline(text) {
   if (!text) return null;
@@ -89,152 +92,7 @@ function parseInline(text) {
   );
 }
 
-function renderMarkdown(text) {
-  if (!text) return null;
-  const lines = text.split('\n');
-  return lines.map((line, i) => {
-    // Empty line — small spacer
-    if (!line.trim()) return <div key={i} style={{ height: 5 }} />;
-
-    // h3
-    if (line.match(/^###\s/)) {
-      return (
-        <div key={i} style={{
-          fontSize: 10, fontWeight: 800, color: '#8A97A8',
-          textTransform: 'uppercase', letterSpacing: '0.08em',
-          marginTop: 16, marginBottom: 4,
-        }}>
-          {line.replace(/^###\s/, '')}
-        </div>
-      );
-    }
-
-    // h2
-    if (line.match(/^##\s/)) {
-      return (
-        <div key={i} style={{
-          fontSize: 12.5, fontWeight: 800, color: NAVY,
-          marginTop: 18, marginBottom: 6,
-          paddingBottom: 5, borderBottom: '1px solid #E4E9F0',
-        }}>
-          {parseInline(line.replace(/^##\s/, ''))}
-        </div>
-      );
-    }
-
-    // h1
-    if (line.match(/^#\s/)) {
-      return (
-        <div key={i} style={{
-          fontSize: 13, fontWeight: 900, color: NAVY,
-          marginTop: 18, marginBottom: 8,
-        }}>
-          {parseInline(line.replace(/^#\s/, ''))}
-        </div>
-      );
-    }
-
-    // Numbered list: "1. text"
-    const numMatch = line.match(/^(\d+)\.\s(.+)/);
-    if (numMatch) {
-      return (
-        <div key={i} style={{ display: 'flex', gap: 8, marginTop: 8, alignItems: 'flex-start' }}>
-          <span style={{
-            minWidth: 18, height: 18, borderRadius: 4, background: NAVY,
-            fontSize: 9, fontWeight: 800, color: '#fff',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            flexShrink: 0, marginTop: 2,
-          }}>
-            {numMatch[1]}
-          </span>
-          <span style={{ fontSize: 12, color: '#4B5A6D', lineHeight: 1.65 }}>
-            {parseInline(numMatch[2])}
-          </span>
-        </div>
-      );
-    }
-
-    // Lettered sub-list: "a) text" or "b) text" at line start
-    const letMatch = line.match(/^([a-fA-F])\)\s(.+)/);
-    if (letMatch) {
-      return (
-        <div key={i} style={{ display: 'flex', gap: 8, marginTop: 5, marginLeft: 14, alignItems: 'flex-start' }}>
-          <span style={{
-            fontSize: 9, fontWeight: 800, color: '#A8B4C0',
-            width: 14, flexShrink: 0, marginTop: 3, letterSpacing: '0.04em',
-            textTransform: 'uppercase',
-          }}>
-            {letMatch[1].toLowerCase()}
-          </span>
-          <span style={{ fontSize: 11.5, color: '#6B7A8D', lineHeight: 1.65 }}>
-            {parseInline(letMatch[2])}
-          </span>
-        </div>
-      );
-    }
-
-    // Indented bullet (2+ spaces before - or *)
-    const indentMatch = line.match(/^\s{2,}[-*]\s(.+)/);
-    if (indentMatch) {
-      return (
-        <div key={i} style={{ display: 'flex', gap: 8, marginTop: 4, marginLeft: 14, alignItems: 'flex-start' }}>
-          <div style={{
-            width: 3, height: 3, borderRadius: '50%',
-            background: '#C8D2DE', flexShrink: 0, marginTop: 9,
-          }} />
-          <span style={{ fontSize: 11.5, color: '#6B7A8D', lineHeight: 1.65 }}>
-            {parseInline(indentMatch[1])}
-          </span>
-        </div>
-      );
-    }
-
-    // Regular bullet: "- text" or "* text"
-    if (line.match(/^[-*]\s/)) {
-      return (
-        <div key={i} style={{ display: 'flex', gap: 10, marginTop: 6, alignItems: 'flex-start' }}>
-          <div style={{
-            width: 2, height: 13, background: ORANGE,
-            borderRadius: 1, flexShrink: 0, marginTop: 4,
-          }} />
-          <span style={{ fontSize: 12, color: '#4B5A6D', lineHeight: 1.65 }}>
-            {parseInline(line.replace(/^[-*]\s/, ''))}
-          </span>
-        </div>
-      );
-    }
-
-    // Plain paragraph
-    return (
-      <p key={i} style={{ fontSize: 12, color: '#4B5A6D', lineHeight: 1.65, margin: '4px 0' }}>
-        {parseInline(line)}
-      </p>
-    );
-  });
-}
-
 // ── Sub-components ────────────────────────────────────────────────
-
-function TabBtn({ label, active, onClick }) {
-  return (
-    <button type="button" onClick={onClick}
-      style={{
-        padding: '10px 8px 9px', background: 'none', border: 'none',
-        cursor: 'pointer', fontSize: 10, whiteSpace: 'nowrap', flexShrink: 0,
-        fontWeight: active ? 800 : 600,
-        color: active ? NAVY : '#8A97A8',
-        textTransform: 'uppercase', letterSpacing: '0.06em',
-        borderBottom: active ? `2px solid ${ORANGE}` : '2px solid transparent',
-        transition: 'color 120ms, border-color 120ms',
-        marginBottom: -1,
-      }}
-      onMouseEnter={(e) => { if (!active) e.currentTarget.style.color = NAVY; }}
-      onMouseLeave={(e) => { if (!active) e.currentTarget.style.color = '#8A97A8'; }}
-    >
-      {label}
-    </button>
-  );
-}
 
 function ScoreCard({ label, score, rationale }) {
   const color  = SCORE_COLORS[score] || '#6b7280';
@@ -277,7 +135,7 @@ function SectionBlock({ title, content }) {
         {title}
       </div>
       <div style={{ marginTop: 10 }}>
-        {renderMarkdown(content)}
+        <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>{content}</ReactMarkdown>
       </div>
     </div>
   );
@@ -705,7 +563,17 @@ function NextStepsTab({ data, onReanalyze, reanalyzing }) {
 
 // ── Main screen ────────────────────────────────────────────────────
 
-export function ExecSummaryScreen({ state, dispatch }) {
+export function ExecSummaryScreen() {
+  const transcript        = useStore(s => s.transcript);
+  const meetingId         = useStore(s => s.meetingId);
+  const settings          = useStore(s => s.settings);
+  const execSummary       = useStore(s => s.execSummary);
+  const execSummaryError  = useStore(s => s.execSummaryError);
+  const setExecSummary    = useStore(s => s.setExecSummary);
+  const setExecSummaryError = useStore(s => s.setExecSummaryError);
+  const setExecSummaryLoading = useStore(s => s.setExecSummaryLoading);
+  const setScreen         = useStore(s => s.setScreen);
+
   const [tab,         setTab]         = useState('summary');
   const [reanalyzing, setReanalyzing] = useState(false);
   const [error,       setError]       = useState(null);
@@ -717,7 +585,7 @@ export function ExecSummaryScreen({ state, dispatch }) {
 
   // Progress bar animation while loading
   useEffect(() => {
-    if (state.execSummary !== 'loading') {
+    if (execSummary !== 'loading') {
       loadPctRef.current = 0;
       setLoadPct(0);
       setLoadStep(0);
@@ -737,35 +605,28 @@ export function ExecSummaryScreen({ state, dispatch }) {
       if (loadPctRef.current >= TARGET) clearInterval(id);
     }, TICK_MS);
     return () => clearInterval(id);
-  }, [state.execSummary]);
+  }, [execSummary]);
 
   // Close download dropdown on outside click
-  useEffect(() => {
-    if (!dlOpen) return;
-    function onDown(e) {
-      if (dlRef.current && !dlRef.current.contains(e.target)) setDlOpen(false);
-    }
-    document.addEventListener('mousedown', onDown);
-    return () => document.removeEventListener('mousedown', onDown);
-  }, [dlOpen]);
+  useClickOutside(dlRef, dlOpen ? () => setDlOpen(false) : null);
 
   async function runAnalysis() {
     setError(null);
     setReanalyzing(true);
-    dispatch({ type: 'EXEC_SUMMARY_LOADING' });
+    setExecSummaryLoading();
     try {
-      const result = await generateExecSummary(state.transcript, state.meetingId, state.settings?.claudeApiKey);
-      dispatch({ type: 'EXEC_SUMMARY_LOADED', execSummary: result });
+      const result = await generateExecSummary(transcript, meetingId, settings?.claudeApiKey);
+      setExecSummary(result);
     } catch (err) {
       setError(err.message);
-      dispatch({ type: 'EXEC_SUMMARY_FAILED' });
+      setExecSummaryError(err.message);
     } finally {
       setReanalyzing(false);
     }
   }
 
   // ── Loading state ──
-  if (state.execSummary === 'loading') {
+  if (execSummary === 'loading') {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', flex: 1, height: '100vh', overflow: 'hidden', background: '#F5F7FA' }}>
         <div style={{
@@ -818,7 +679,7 @@ export function ExecSummaryScreen({ state, dispatch }) {
   }
 
   // ── No data state ──
-  if (!state.execSummary) {
+  if (!execSummary) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', flex: 1, height: '100vh', overflow: 'hidden', background: '#F5F7FA' }}>
         <div style={{
@@ -826,7 +687,7 @@ export function ExecSummaryScreen({ state, dispatch }) {
           background: '#fff', borderBottom: '1px solid #E4E9F0', flexShrink: 0, gap: 8,
         }}>
           <button type="button"
-            onClick={() => dispatch({ type: 'SET_SCREEN', screen: SCREENS.DETECTION })}
+            onClick={() => setScreen(SCREENS.DETECTION)}
             style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px 6px 4px 0', display: 'flex', color: '#8A97A8' }}
             onMouseEnter={(e) => (e.currentTarget.style.color = NAVY)}
             onMouseLeave={(e) => (e.currentTarget.style.color = '#8A97A8')}
@@ -854,16 +715,16 @@ export function ExecSummaryScreen({ state, dispatch }) {
               Generate a comprehensive exec summary covering storyline, differentiation, risks, and follow-up actions.
             </div>
           </div>
-          {(error || state.execSummaryError) && (
+          {(error || execSummaryError) && (
             <div style={{
               background: '#fef2f2', color: '#dc2626', fontSize: 11.5,
               padding: '9px 12px', borderRadius: 7, border: '1px solid #fecaca', maxWidth: 280,
               lineHeight: 1.55,
             }}>
-              {error || state.execSummaryError}
+              {error || execSummaryError}
             </div>
           )}
-          {state.transcript && (
+          {transcript && (
             <button type="button" onClick={runAnalysis}
               style={{
                 display: 'flex', alignItems: 'center', gap: 6,
@@ -880,7 +741,7 @@ export function ExecSummaryScreen({ state, dispatch }) {
     );
   }
 
-  const data = state.execSummary;
+  const data = execSummary;
 
   // ── Main view ──
   return (
@@ -894,7 +755,7 @@ export function ExecSummaryScreen({ state, dispatch }) {
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <button type="button"
-            onClick={() => dispatch({ type: 'SET_SCREEN', screen: SCREENS.DETECTION })}
+            onClick={() => setScreen(SCREENS.DETECTION)}
             style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px 6px 4px 0', display: 'flex', color: '#8A97A8' }}
             onMouseEnter={(e) => (e.currentTarget.style.color = NAVY)}
             onMouseLeave={(e) => (e.currentTarget.style.color = '#8A97A8')}
@@ -904,13 +765,13 @@ export function ExecSummaryScreen({ state, dispatch }) {
           <div style={{ fontSize: 13, fontWeight: 900, color: NAVY, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
             Exec Summary
           </div>
-          {state.meetingId && (
+          {meetingId && (
             <span style={{
               fontSize: 10, fontWeight: 700, color: '#8A97A8',
               background: '#F5F7FA', border: '1px solid #E4E9F0',
               padding: '2px 8px', borderRadius: 5, fontFamily: 'monospace',
             }}>
-              #{state.meetingId.slice(-6)}
+              #{meetingId.slice(-6)}
             </span>
           )}
         </div>
@@ -952,7 +813,7 @@ export function ExecSummaryScreen({ state, dispatch }) {
                   { fmt: 'txt', label: 'Plain Text',          ext: '.txt' },
                 ].map(({ fmt, label, ext }) => (
                   <button key={fmt} type="button"
-                    onClick={() => { downloadExecSummary(data, state.meetingId, fmt); setDlOpen(false); }}
+                    onClick={() => { downloadExecSummary(data, meetingId, fmt); setDlOpen(false); }}
                     style={{
                       width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                       padding: '9px 14px', background: 'none', border: 'none', cursor: 'pointer',
@@ -979,15 +840,7 @@ export function ExecSummaryScreen({ state, dispatch }) {
       )}
 
       {/* Tab bar */}
-      <div style={{
-        display: 'flex', flexShrink: 0,
-        background: '#fff', borderBottom: '1px solid #E4E9F0',
-        padding: '0 8px', overflowX: 'auto',
-      }}>
-        {TABS.map(({ key, label }) => (
-          <TabBtn key={key} label={label} active={tab === key} onClick={() => setTab(key)} />
-        ))}
-      </div>
+      <TabBar tabs={TABS} active={tab} onSelect={setTab} scrollable size="sm" />
 
       {/* Tab content */}
       <div key={tab} style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', animation: 'tabEnter 200ms cubic-bezier(0.22,1,0.36,1) both' }}>

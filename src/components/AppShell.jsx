@@ -1,9 +1,8 @@
 import { useState } from 'react';
 import { Home, FileText, Lightbulb, BarChart2, Settings, Mic, ClipboardList, MessageCircle, Target, BookOpen, Compass } from 'lucide-react';
-import { SCREENS } from '../constants';
-
-const ORANGE = '#E55014';
-const NAVY   = '#0D1726';
+import { SCREENS, ORANGE, NAVY } from '../constants';
+import { Spinner } from './ui/Spinner';
+import { useStore } from '../store';
 
 function getActiveNav(screen) {
   const map = {
@@ -51,14 +50,7 @@ function NavItem({ icon: Icon, label, active, enabled, loading, onClick }) {
         }}
       >
         {loading ? (
-          <span style={{
-            width: 14, height: 14,
-            border: '1.5px solid rgba(255,255,255,0.15)',
-            borderTopColor: ORANGE,
-            borderRadius: '50%',
-            animation: 'spin 0.8s linear infinite',
-            display: 'inline-block',
-          }} />
+          <Spinner size={14} color={ORANGE} trackColor="rgba(255,255,255,0.15)" />
         ) : (
           <Icon size={17} strokeWidth={active ? 2.5 : 2} />
         )}
@@ -92,13 +84,18 @@ function NavItem({ icon: Icon, label, active, enabled, loading, onClick }) {
   );
 }
 
-export function AppShell({ state, dispatch, children }) {
-  const activeNav          = getActiveNav(state.screen);
-  const hasTranscript       = !!state.transcript;
-  const hasInsights         = (state.insights || []).length > 0;
-  const hasIntelligence     = state.callIntelligence !== null;
-  const loadingIntelligence = state.callIntelligence === 'loading';
-  const loadingExecSummary  = state.execSummary === 'loading';
+export function AppShell({ children }) {
+  const screen          = useStore(s => s.screen);
+  const transcript      = useStore(s => s.transcript);
+  const callIntelligence = useStore(s => s.callIntelligence);
+  const execSummary     = useStore(s => s.execSummary);
+  const setScreen       = useStore(s => s.setScreen);
+
+  const activeNav          = getActiveNav(screen);
+  const hasTranscript       = !!transcript;
+  const hasIntelligence     = callIntelligence !== null;
+  const loadingIntelligence = callIntelligence === 'loading';
+  const loadingExecSummary  = execSummary === 'loading';
 
   const topItems = [
     {
@@ -210,7 +207,7 @@ export function AppShell({ state, dispatch, children }) {
               active={activeNav === item.id}
               enabled={item.enabled}
               loading={item.loading}
-              onClick={() => dispatch({ type: 'SET_SCREEN', screen: item.screen })}
+              onClick={() => setScreen(item.screen)}
             />
           ))}
         </div>
@@ -224,7 +221,7 @@ export function AppShell({ state, dispatch, children }) {
           label="Settings"
           active={activeNav === 'settings'}
           enabled={true}
-          onClick={() => dispatch({ type: 'SET_SCREEN', screen: SCREENS.SETTINGS })}
+          onClick={() => setScreen(SCREENS.SETTINGS)}
         />
       </div>
     </div>

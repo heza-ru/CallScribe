@@ -2,10 +2,9 @@ import React, { useState } from 'react';
 import { ArrowLeft, Send, ExternalLink } from 'lucide-react';
 import { createJiraTicket } from '../services/jiraService';
 import { createProductboardInsight } from '../services/productboardService';
-import { SCREENS } from '../constants';
-
-const ORANGE = '#E55014';
-const NAVY   = '#0D1726';
+import { SCREENS, ORANGE, NAVY } from '../constants';
+import { Spinner } from './ui/Spinner';
+import { useStore } from '../store';
 
 const PRIORITIES = ['Low', 'Medium', 'High', 'Critical'];
 const TYPES = [
@@ -16,8 +15,14 @@ const TYPES = [
   { value: 'action',      label: 'Action Item' },
 ];
 
-export function TicketReview({ state, dispatch }) {
-  const draft = state.draftTicket || {};
+export function TicketReview() {
+  const draftTicket    = useStore(s => s.draftTicket);
+  const meetingId      = useStore(s => s.meetingId);
+  const settings       = useStore(s => s.settings);
+  const setScreen      = useStore(s => s.setScreen);
+  const ticketSubmitted = useStore(s => s.ticketSubmitted);
+
+  const draft = draftTicket || {};
   const [title,       setTitle]       = useState(draft.title || '');
   const [description, setDescription] = useState(draft.description || '');
   const [productArea, setProductArea] = useState(draft.productArea || '');
@@ -32,14 +37,14 @@ export function TicketReview({ state, dispatch }) {
     return {
       title, description, productArea, priority, type,
       labels: labels.split(',').map(l => l.trim()).filter(Boolean),
-      meetingId: state.meetingId,
+      meetingId,
     };
   }
 
   async function handleJira() {
     setJira({ loading: true, done: false, url: null, error: null });
     try {
-      const r = await createJiraTicket(buildTicket(), state.settings);
+      const r = await createJiraTicket(buildTicket(), settings);
       setJira({ loading: false, done: true, url: r.url, error: null });
     } catch (err) {
       setJira({ loading: false, done: false, url: null, error: err.message });
@@ -49,7 +54,7 @@ export function TicketReview({ state, dispatch }) {
   async function handlePB() {
     setPb({ loading: true, done: false, url: null, error: null });
     try {
-      const r = await createProductboardInsight(buildTicket(), state.settings);
+      const r = await createProductboardInsight(buildTicket(), settings);
       setPb({ loading: false, done: true, url: r.url, error: null });
     } catch (err) {
       setPb({ loading: false, done: false, url: null, error: err.message });
@@ -73,7 +78,7 @@ export function TicketReview({ state, dispatch }) {
         background: '#fff', borderBottom: '1px solid #E4E9F0', flexShrink: 0,
       }}>
         <button type="button"
-          onClick={() => dispatch({ type: 'SET_SCREEN', screen: SCREENS.ANALYSIS })}
+          onClick={() => setScreen(SCREENS.ANALYSIS)}
           style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px 6px 4px 0', display: 'flex', color: '#8A97A8' }}
           onMouseEnter={(e) => (e.currentTarget.style.color = NAVY)}
           onMouseLeave={(e) => (e.currentTarget.style.color = '#8A97A8')}
@@ -172,7 +177,7 @@ export function TicketReview({ state, dispatch }) {
           }}
         >
           {jira.loading
-            ? <span style={{ width: 14, height: 14, border: '2px solid rgba(255,255,255,0.3)', borderTopColor: '#fff', borderRadius: '50%', animation: 'spin 0.7s linear infinite', display: 'inline-block' }} />
+            ? <Spinner size={14} color="#fff" trackColor="rgba(255,255,255,0.3)" />
             : jira.done ? <ExternalLink size={12} /> : <Send size={12} />
           }
           {jira.done ? 'Re-submit JIRA' : 'JIRA'}
@@ -191,7 +196,7 @@ export function TicketReview({ state, dispatch }) {
           }}
         >
           {pb.loading
-            ? <span style={{ width: 14, height: 14, border: '2px solid rgba(255,255,255,0.3)', borderTopColor: '#fff', borderRadius: '50%', animation: 'spin 0.7s linear infinite', display: 'inline-block' }} />
+            ? <Spinner size={14} color="#fff" trackColor="rgba(255,255,255,0.3)" />
             : pb.done ? <ExternalLink size={12} /> : <Send size={12} />
           }
           {pb.done ? 'Re-submit PB' : 'Productboard'}

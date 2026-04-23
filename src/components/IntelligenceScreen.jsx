@@ -7,10 +7,11 @@ import {
 } from 'lucide-react';
 import { analyzeTranscript, analyzeCallIntelligence, detectCompetitors, trackObjections } from '../services/claudeService';
 import { downloadIntelligence, downloadCompetitors, downloadObjections, downloadFullReport } from '../utils/analysisFormatter';
-import { SCREENS } from '../constants';
-
-const ORANGE = '#E55014';
-const NAVY   = '#0D1726';
+import { SCREENS, ORANGE, NAVY } from '../constants';
+import { Spinner } from './ui/Spinner';
+import { TabBar } from './ui/TabBar';
+import { useClickOutside } from '../hooks/useClickOutside';
+import { useStore } from '../store';
 
 // ── Primitives ────────────────────────────────────────────────
 
@@ -22,27 +23,6 @@ function SectionLabel({ children }) {
     }}>
       {children}
     </div>
-  );
-}
-
-function Tab({ label, active, onClick, tabRef }) {
-  return (
-    <button type="button" onClick={onClick} ref={tabRef}
-      style={{
-        padding: '10px 8px 9px', background: 'none', border: 'none',
-        cursor: 'pointer', fontSize: 10, whiteSpace: 'nowrap', flexShrink: 0,
-        fontWeight: active ? 800 : 600,
-        color: active ? NAVY : '#8A97A8',
-        textTransform: 'uppercase', letterSpacing: '0.06em',
-        borderBottom: active ? `2px solid ${ORANGE}` : '2px solid transparent',
-        transition: 'color 120ms, border-color 120ms',
-        marginBottom: -1,
-      }}
-      onMouseEnter={(e) => { if (!active) e.currentTarget.style.color = NAVY; }}
-      onMouseLeave={(e) => { if (!active) e.currentTarget.style.color = '#8A97A8'; }}
-    >
-      {label}
-    </button>
   );
 }
 
@@ -155,10 +135,10 @@ function InsightsTab({ ci }) {
         animationDelay: '120ms',
       }}>
         {[
-          { label: 'Duration',    value: `${Math.floor((ci.callDuration || 0) / 60)}m ${(ci.callDuration || 0) % 60}s` },
-          { label: 'Talk Ratio',  value: `${ci.talkRatio?.rep || 45}/${ci.talkRatio?.customer || 55}` },
-          { label: 'Interrupts',  value: ci.interrupts ?? '—' },
-          { label: 'Framework',   value: ci.framework || '—' },
+          { label: 'Effectiveness', value: `${ci.effectiveness ?? '—'}/10` },
+          { label: 'Framework',     value: ci.framework || '—' },
+          { label: 'Call Type',     value: ci.callType || '—' },
+          { label: 'Q&A Coverage',  value: ci.questionsAnsweredPct != null ? `${ci.questionsAnsweredPct}%` : '—' },
         ].map(({ label, value }) => (
           <div key={label} style={{
             background: '#fff', borderRadius: 8, border: '1px solid #E4E9F0',
@@ -392,32 +372,27 @@ const SENTIMENT_STYLE = {
   neutral:  { bg: '#F5F7FA', color: '#6b7280', border: '#E4E9F0' },
 };
 
-function CompetitorsTab({ state, dispatch }) {
+function CompetitorsTab({ transcript, settings, competitors, setCompetitors, meetingId }) {
   const [loading,  setLoading]  = useState(false);
   const [error,    setError]    = useState(null);
   const [dlOpen,   setDlOpen]   = useState(false);
   const dlRef = useRef(null);
 
-  useEffect(() => {
-    if (!dlOpen) return;
-    function onDown(e) { if (dlRef.current && !dlRef.current.contains(e.target)) setDlOpen(false); }
-    document.addEventListener('mousedown', onDown);
-    return () => document.removeEventListener('mousedown', onDown);
-  }, [dlOpen]);
+  useClickOutside(dlRef, dlOpen ? () => setDlOpen(false) : null);
 
-  const data = state.competitors;
+  const data = competitors;
   const hasData = data && data !== 'loading' && data.competitors !== undefined;
 
   async function handleDetect() {
     setLoading(true);
     setError(null);
-    dispatch({ type: 'COMPETITORS_LOADING' });
+    setCompetitors('loading');
     try {
-      const result = await detectCompetitors(state.transcript, state.settings?.claudeApiKey);
-      dispatch({ type: 'COMPETITORS_LOADED', competitors: result });
+      const result = await detectCompetitors(transcript, settings?.claudeApiKey);
+      setCompetitors(result);
     } catch (err) {
       setError(err.message);
-      dispatch({ type: 'COMPETITORS_FAILED' });
+      setCompetitors(null);
     } finally {
       setLoading(false);
     }
@@ -451,7 +426,7 @@ function CompetitorsTab({ state, dispatch }) {
 
       {isLoading && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '16px 0', color: '#8A97A8', fontSize: 12, fontWeight: 600 }}>
-          <span style={{ width: 14, height: 14, border: '2px solid #E4E9F0', borderTopColor: ORANGE, borderRadius: '50%', animation: 'spin 0.7s linear infinite', display: 'inline-block', flexShrink: 0 }} />
+          <Spinner size={14} color={ORANGE} trackColor="#E4E9F0" />
           Scanning for competitor mentions...
         </div>
       )}
@@ -521,7 +496,7 @@ function CompetitorsTab({ state, dispatch }) {
                 <div style={{ position: 'absolute', bottom: 'calc(100% + 4px)', right: 0, zIndex: 50, background: '#fff', borderRadius: 8, border: '1px solid #E4E9F0', boxShadow: '0 6px 20px rgba(13,23,38,0.10)', overflow: 'hidden', minWidth: 150 }}>
                   {[{ fmt: 'md', label: 'Markdown', ext: '.md' }, { fmt: 'json', label: 'JSON', ext: '.json' }, { fmt: 'doc', label: 'Word (.doc)', ext: '.doc' }, { fmt: 'txt', label: 'Plain Text', ext: '.txt' }].map(({ fmt, label, ext }) => (
                     <button key={fmt} type="button"
-                      onClick={() => { downloadCompetitors(data, state.meetingId, fmt); setDlOpen(false); }}
+                      onClick={() => { downloadCompetitors(data, meetingId, fmt); setDlOpen(false); }}
                       style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', background: 'none', border: 'none', cursor: 'pointer', borderTop: '1px solid #F5F7FA', fontSize: 11.5, fontFamily: 'var(--font-sans)', fontWeight: 600, color: NAVY, textAlign: 'left', gap: 12 }}
                       onMouseEnter={(e) => (e.currentTarget.style.background = '#F5F7FA')}
                       onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
@@ -548,33 +523,28 @@ const SEVERITY_STYLE = {
   minor:    { bg: '#F5F7FA', color: '#6b7280', border: '#E4E9F0' },
 };
 
-function ObjectionsTab({ state, dispatch }) {
+function ObjectionsTab({ transcript, settings, objections, setObjections, meetingId }) {
   const [loading,  setLoading]  = useState(false);
   const [error,    setError]    = useState(null);
   const [dlOpen,   setDlOpen]   = useState(false);
   const dlRef = useRef(null);
 
-  useEffect(() => {
-    if (!dlOpen) return;
-    function onDown(e) { if (dlRef.current && !dlRef.current.contains(e.target)) setDlOpen(false); }
-    document.addEventListener('mousedown', onDown);
-    return () => document.removeEventListener('mousedown', onDown);
-  }, [dlOpen]);
+  useClickOutside(dlRef, dlOpen ? () => setDlOpen(false) : null);
 
-  const data = state.objections;
+  const data = objections;
   const hasData = data && data !== 'loading' && data.objections !== undefined;
   const isLoading = loading || data === 'loading';
 
   async function handleDetect() {
     setLoading(true);
     setError(null);
-    dispatch({ type: 'OBJECTIONS_LOADING' });
+    setObjections('loading');
     try {
-      const result = await trackObjections(state.transcript, state.settings?.claudeApiKey);
-      dispatch({ type: 'OBJECTIONS_LOADED', objections: result });
+      const result = await trackObjections(transcript, settings?.claudeApiKey);
+      setObjections(result);
     } catch (err) {
       setError(err.message);
-      dispatch({ type: 'OBJECTIONS_FAILED' });
+      setObjections(null);
     } finally {
       setLoading(false);
     }
@@ -606,7 +576,7 @@ function ObjectionsTab({ state, dispatch }) {
 
       {isLoading && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '16px 0', color: '#8A97A8', fontSize: 12, fontWeight: 600 }}>
-          <span style={{ width: 14, height: 14, border: '2px solid #E4E9F0', borderTopColor: ORANGE, borderRadius: '50%', animation: 'spin 0.7s linear infinite', display: 'inline-block', flexShrink: 0 }} />
+          <Spinner size={14} color={ORANGE} trackColor="#E4E9F0" />
           Identifying objections...
         </div>
       )}
@@ -696,7 +666,7 @@ function ObjectionsTab({ state, dispatch }) {
                 <div style={{ position: 'absolute', bottom: 'calc(100% + 4px)', right: 0, zIndex: 50, background: '#fff', borderRadius: 8, border: '1px solid #E4E9F0', boxShadow: '0 6px 20px rgba(13,23,38,0.10)', overflow: 'hidden', minWidth: 150 }}>
                   {[{ fmt: 'md', label: 'Markdown', ext: '.md' }, { fmt: 'json', label: 'JSON', ext: '.json' }, { fmt: 'doc', label: 'Word (.doc)', ext: '.doc' }, { fmt: 'csv', label: 'CSV', ext: '.csv' }, { fmt: 'txt', label: 'Plain Text', ext: '.txt' }].map(({ fmt, label, ext }) => (
                     <button key={fmt} type="button"
-                      onClick={() => { downloadObjections(data, state.meetingId, fmt); setDlOpen(false); }}
+                      onClick={() => { downloadObjections(data, meetingId, fmt); setDlOpen(false); }}
                       style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', background: 'none', border: 'none', cursor: 'pointer', borderTop: '1px solid #F5F7FA', fontSize: 11.5, fontFamily: 'var(--font-sans)', fontWeight: 600, color: NAVY, textAlign: 'left', gap: 12 }}
                       onMouseEnter={(e) => (e.currentTarget.style.background = '#F5F7FA')}
                       onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
@@ -725,21 +695,27 @@ const TABS = [
   { key: 'objections',  label: 'Objections' },
 ];
 
-export function IntelligenceScreen({ state, dispatch }) {
+export function IntelligenceScreen() {
+  const transcript       = useStore(s => s.transcript);
+  const meetingId        = useStore(s => s.meetingId);
+  const settings         = useStore(s => s.settings);
+  const callIntelligence = useStore(s => s.callIntelligence);
+  const competitors      = useStore(s => s.competitors);
+  const objections       = useStore(s => s.objections);
+  const setCallIntelligence = useStore(s => s.setCallIntelligence);
+  const insightsLoaded   = useStore(s => s.insightsLoaded);
+  const setCompetitors   = useStore(s => s.setCompetitors);
+  const setObjections    = useStore(s => s.setObjections);
+  const setScreen        = useStore(s => s.setScreen);
+
   const [tab,         setTab]         = useState('insights');
   const [reanalyzing, setReanalyzing] = useState(false);
   const [error,       setError]       = useState(null);
   const [dlOpen,      setDlOpen]      = useState(false);
   const dlRef = useRef(null);
-  const tabBarRef = useRef(null);
   const activeTabBtnRef = useRef(null);
 
-  useEffect(() => {
-    if (!dlOpen) return;
-    function onDown(e) { if (dlRef.current && !dlRef.current.contains(e.target)) setDlOpen(false); }
-    document.addEventListener('mousedown', onDown);
-    return () => document.removeEventListener('mousedown', onDown);
-  }, [dlOpen]);
+  useClickOutside(dlRef, dlOpen ? () => setDlOpen(false) : null);
 
   useEffect(() => {
     if (activeTabBtnRef.current) {
@@ -750,18 +726,17 @@ export function IntelligenceScreen({ state, dispatch }) {
   async function handleReanalyze() {
     setError(null);
     setReanalyzing(true);
-    const { transcript, meetingId, settings } = state;
     const apiKey = settings?.claudeApiKey;
 
-    dispatch({ type: 'CALL_INTELLIGENCE_LOADING' });
+    setCallIntelligence('loading');
     analyzeCallIntelligence(transcript, meetingId, apiKey)
-      .then(ci => dispatch({ type: 'CALL_INTELLIGENCE_LOADED', callIntelligence: ci }))
-      .catch(() => dispatch({ type: 'CALL_INTELLIGENCE_FAILED' }));
+      .then(ci => setCallIntelligence(ci))
+      .catch(() => setCallIntelligence(null));
 
     try {
       const insights = await analyzeTranscript(transcript, meetingId, apiKey);
-      dispatch({ type: 'INSIGHTS_LOADED', insights });
-      dispatch({ type: 'SET_SCREEN', screen: SCREENS.INTELLIGENCE });
+      insightsLoaded(insights);
+      setScreen(SCREENS.INTELLIGENCE);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -770,14 +745,14 @@ export function IntelligenceScreen({ state, dispatch }) {
   }
 
   // Loading state
-  if (state.callIntelligence === 'loading') {
+  if (callIntelligence === 'loading') {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', flex: 1, height: '100vh', overflow: 'hidden', background: '#F5F7FA' }}>
         <div style={{ display: 'flex', alignItems: 'center', padding: '14px 16px 12px', background: '#fff', borderBottom: '1px solid #E4E9F0', flexShrink: 0 }}>
           <div style={{ fontSize: 13, fontWeight: 900, color: NAVY, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Call Insights</div>
         </div>
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
-          <span style={{ width: 28, height: 28, border: '2.5px solid #E4E9F0', borderTopColor: ORANGE, borderRadius: '50%', animation: 'spin 0.8s linear infinite', display: 'block' }} />
+          <Spinner size={28} color={ORANGE} trackColor="#E4E9F0" />
           <div style={{ textAlign: 'center' }}>
             <div style={{ fontSize: 13, fontWeight: 700, color: NAVY, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Running Analysis</div>
             <div style={{ fontSize: 11, color: '#8A97A8', marginTop: 4 }}>Detecting call type, frameworks, and sentiment</div>
@@ -788,7 +763,7 @@ export function IntelligenceScreen({ state, dispatch }) {
   }
 
   // No data
-  if (!state.callIntelligence) {
+  if (!callIntelligence) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', flex: 1, height: '100vh', overflow: 'hidden', background: '#F5F7FA' }}>
         <div style={{ display: 'flex', alignItems: 'center', padding: '14px 16px 12px', background: '#fff', borderBottom: '1px solid #E4E9F0', flexShrink: 0 }}>
@@ -804,7 +779,7 @@ export function IntelligenceScreen({ state, dispatch }) {
               Run "Analyze with Claude" on the Transcript screen to generate call intelligence.
             </div>
           </div>
-          {state.transcript && (
+          {transcript && (
             <button type="button" onClick={handleReanalyze}
               style={{
                 display: 'flex', alignItems: 'center', gap: 6,
@@ -821,7 +796,7 @@ export function IntelligenceScreen({ state, dispatch }) {
     );
   }
 
-  const ci = state.callIntelligence;
+  const ci = callIntelligence;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1, height: '100vh', overflow: 'hidden', background: '#F5F7FA' }}>
@@ -835,7 +810,7 @@ export function IntelligenceScreen({ state, dispatch }) {
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <button type="button"
-            onClick={() => dispatch({ type: 'SET_SCREEN', screen: SCREENS.DETECTION })}
+            onClick={() => setScreen(SCREENS.DETECTION)}
             style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px 6px 4px 0', display: 'flex', color: '#8A97A8' }}
             onMouseEnter={(e) => (e.currentTarget.style.color = NAVY)}
             onMouseLeave={(e) => (e.currentTarget.style.color = '#8A97A8')}
@@ -845,14 +820,14 @@ export function IntelligenceScreen({ state, dispatch }) {
           <div style={{ fontSize: 13, fontWeight: 900, color: NAVY, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
             Call Insights
           </div>
-          {state.meetingId && (
+          {meetingId && (
             <span style={{
               fontSize: 10, fontWeight: 700, color: '#8A97A8',
               background: '#F5F7FA', border: '1px solid #E4E9F0',
               padding: '2px 8px', borderRadius: 5,
               fontFamily: 'monospace',
             }}>
-              #{state.meetingId.slice(-6)}
+              #{meetingId.slice(-6)}
             </span>
           )}
         </div>
@@ -882,7 +857,7 @@ export function IntelligenceScreen({ state, dispatch }) {
                 </div>
                 {[{ fmt: 'md', label: 'Markdown', ext: '.md' }, { fmt: 'json', label: 'JSON', ext: '.json' }, { fmt: 'doc', label: 'Word / Google Docs', ext: '.doc' }, { fmt: 'txt', label: 'Plain Text', ext: '.txt' }].map(({ fmt, label, ext }) => (
                   <button key={fmt} type="button"
-                    onClick={() => { downloadIntelligence(ci, state.meetingId, fmt); setDlOpen(false); }}
+                    onClick={() => { downloadIntelligence(ci, meetingId, fmt); setDlOpen(false); }}
                     style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '9px 14px', background: 'none', border: 'none', cursor: 'pointer', borderTop: '1px solid #F5F7FA', fontSize: 12, fontFamily: 'var(--font-sans)', fontWeight: 600, color: NAVY, textAlign: 'left', gap: 16 }}
                     onMouseEnter={(e) => (e.currentTarget.style.background = '#F5F7FA')}
                     onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
@@ -904,30 +879,15 @@ export function IntelligenceScreen({ state, dispatch }) {
       )}
 
       {/* Tab bar — scrollable so all tabs are reachable at any width */}
-      <div ref={tabBarRef} className="tab-bar-scroll" style={{
-        display: 'flex', flexShrink: 0,
-        background: '#fff', borderBottom: '1px solid #E4E9F0',
-        padding: '0 8px',
-        overflowX: 'auto',
-      }}>
-        {TABS.map(({ key, label }) => (
-          <Tab
-            key={key}
-            label={label}
-            active={tab === key}
-            onClick={() => setTab(key)}
-            tabRef={tab === key ? activeTabBtnRef : null}
-          />
-        ))}
-      </div>
+      <TabBar tabs={TABS} active={tab} onSelect={setTab} scrollable size="sm" activeRef={activeTabBtnRef} />
 
       {/* Tab content */}
       <div key={tab} style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', animation: 'tabEnter 200ms cubic-bezier(0.22,1,0.36,1) both' }}>
         {tab === 'insights'    && <InsightsTab    ci={ci} />}
         {tab === 'sentiment'   && <SentimentTab   ci={ci} />}
         {tab === 'coaching'    && <CoachingTab    ci={ci} onReanalyze={handleReanalyze} reanalyzing={reanalyzing} />}
-        {tab === 'competitors' && <CompetitorsTab state={state} dispatch={dispatch} />}
-        {tab === 'objections'  && <ObjectionsTab  state={state} dispatch={dispatch} />}
+        {tab === 'competitors' && <CompetitorsTab transcript={transcript} settings={settings} competitors={competitors} setCompetitors={setCompetitors} meetingId={meetingId} />}
+        {tab === 'objections'  && <ObjectionsTab  transcript={transcript} settings={settings} objections={objections} setObjections={setObjections} meetingId={meetingId} />}
       </div>
     </div>
   );
